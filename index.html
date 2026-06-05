@@ -3,61 +3,71 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Survival Roguelike</title>
+<title>Roguelike Survival</title>
+
 <style>
-body{margin:0;overflow:hidden;background:black;touch-action:none;}
-canvas{display:block;}
-#ui{position:fixed;top:0;left:0;color:white;font-family:sans-serif;padding:8px;font-size:13px;}
+body { margin:0; overflow:hidden; background:black; touch-action:none; }
+canvas { display:block; }
 </style>
 </head>
+
 <body>
 <canvas id="c"></canvas>
-<div id="ui"></div>
 
 <script>
 const c=document.getElementById("c");
 const ctx=c.getContext("2d");
 
-function resize(){c.width=innerWidth;c.height=innerHeight;}
-resize(); addEventListener("resize",resize);
+// ================= SAFE INIT =================
+function resize(){
+c.width=window.innerWidth;
+c.height=window.innerHeight;
+
+player.x=c.width/2;
+player.y=c.height/2;
+}
+window.addEventListener("resize",resize);
 
 // ================= PLAYER =================
-const player={
-x:c.width/2,y:c.height/2,
+let player={
+x:0,y:0,
 r:10,
-hp:100,maxHp:100,
+hp:100,
+maxHp:100,
 inv:false
 };
 
-// ================= GAME CORE =================
+// ================= GAME STATE =================
 let bullets=[];
 let time=0;
 let gameOver=false;
 let started=false;
 let countdown=3;
 
-// ================= SYSTEM STATE =================
+// ================= SYSTEM =================
 let cardUI=false;
 let timeStop=false;
 let timeStopT=0;
 let cardTimer=0;
 let cards=[];
 
-// ================= GLOBAL EFFECTS =================
+// ================= EFFECTS =================
 let damageMul=1;
-let playerSpeed=1;
-let dodgeRate=0;
 let slowBullet=false;
+let dodgeRate=0;
 
-// ================= TOUCH CONTROL =================
+// ================= INIT CALL =================
+resize();
+
+// ================= TOUCH =================
 addEventListener("touchmove",e=>{
 let t=e.touches[0];
 player.x=t.clientX;
 player.y=t.clientY;
 });
 
-// ================= BULLET =================
-function spawn(){
+// ================= BULLETS =================
+function spawnBullet(){
 let s=2+Math.random()*2;
 let side=Math.floor(Math.random()*4);
 let x,y,vx,vy;
@@ -72,43 +82,43 @@ bullets.push({x,y,vx,vy,r:5,dmg:5});
 
 // ================= SPECIAL =================
 function special(){
-for(let i=0;i<18;i++){
-let a=(Math.PI*2/18)*i;
+for(let i=0;i<16;i++){
+let a=(Math.PI*2/16)*i;
 bullets.push({x:c.width/2,y:0,vx:Math.cos(a)*3,vy:Math.sin(a)*3,r:6,dmg:8});
 }
 }
 
-// ================= CARD SYSTEM (20 TYPES) =================
+// ================= CARD SYSTEM (20) =================
 function createCards(){
 let pool=[
-{t:"HP20",n:"HP 20% 회복",c:"green"},
-{t:"HP40",n:"HP 40% 회복",c:"blue"},
-{t:"HP80",n:"HP 80% 회복",c:"purple"},
+["HP20","HP 20% 회복","green"],
+["HP40","HP 40% 회복","blue"],
+["HP80","HP 80% 회복","purple"],
 
-{t:"DEF10",n:"피해 10% 감소",c:"green"},
-{t:"DEF30",n:"피해 30% 감소",c:"blue"},
-{t:"DEF50",n:"피해 50% 감소",c:"purple"},
+["DEF10","피해 10% 감소","green"],
+["DEF30","피해 30% 감소","blue"],
+["DEF50","피해 50% 감소","purple"],
 
-{t:"SHIELD",n:"2초 보호막",c:"blue"},
-{t:"REVIVE",n:"부활 30%",c:"purple"},
+["SHIELD","2초 무적","blue"],
+["REVIVE","부활","purple"],
 
-{t:"SPD",n:"이속 증가",c:"green"},
-{t:"SLOW",n:"탄막 속도 감소",c:"blue"},
+["SLOW","탄막 느리게","blue"],
+["DODGE","5% 회피","purple"],
 
-{t:"DODGE",n:"5% 회피",c:"purple"},
-{t:"REGEN",n:"비피격 회복",c:"green"},
+["HEAL5","즉시 5% 회복","green"],
+["REGEN","지속 회복","green"],
 
-{t:"TICK",n:"30초 회복",c:"green"},
-{t:"HEAL5",n:"5% 회복",c:"green"},
+["BOOST","HP 재생 강화","green"],
+["TICK","30초 회복","green"],
 
-{t:"BORDER+",n:"경계 확대",c:"blue"},
-{t:"BORDER-",n:"경계 축소",c:"purple"},
+["FAST","이속 증가","green"],
+["ENEMY","적 강화","purple"],
 
-{t:"ENEMY+",n:"적 속도 증가",c:"purple"},
-{t:"DOT",n:"지속 피해",c:"purple"},
+["DOT","지속 피해","purple"],
+["LUCK","회피 증가","blue"],
 
-{t:"LUCK",n:"회피 확률",c:"blue"},
-{t:"BOOST",n:"HP 재생 강화",c:"green"}
+["BORDER","경계 변화","blue"],
+["SAFE","보험 효과","purple"]
 ];
 
 cards=[];
@@ -122,7 +132,7 @@ pool.splice(r,1);
 // ================= APPLY CARD =================
 function apply(card){
 
-switch(card.t){
+switch(card[0]){
 
 case "HP20": player.hp+=player.maxHp*0.2; break;
 case "HP40": player.hp+=player.maxHp*0.4; break;
@@ -143,29 +153,14 @@ player.inv=true;
 setTimeout(()=>player.inv=false,2000);
 break;
 
-case "SPD": playerSpeed=1.3; break;
 case "SLOW": slowBullet=true; break;
-
 case "DODGE": dodgeRate=0.05; break;
-
-case "REGEN":
-setInterval(()=>{if(player.hp>0)player.hp+=1;},1000);
-break;
-
-case "TICK":
-setInterval(()=>player.hp+=player.maxHp*0.01,30000);
-break;
 
 case "HEAL5": player.hp+=player.maxHp*0.05; break;
 
-case "BORDER+": break;
-case "BORDER-": break;
-
-case "ENEMY+": break;
-
-case "DOT": break;
-
-case "LUCK": dodgeRate=0.1; break;
+case "REGEN":
+setInterval(()=>player.hp+=1,1000);
+break;
 
 case "BOOST":
 setInterval(()=>player.hp+=player.maxHp*0.02,1000);
@@ -173,7 +168,7 @@ break;
 }
 }
 
-// ================= TOUCH CARD SELECT =================
+// ================= CARD CLICK =================
 addEventListener("touchstart",e=>{
 if(!cardUI)return;
 
@@ -182,7 +177,7 @@ let x=t.clientX;
 let y=t.clientY;
 
 for(let i=0;i<cards.length;i++){
-let cx=c.width/2-150+i*150;
+let cx=c.width/2-140+i*140;
 let cy=c.height/2;
 
 if(Math.abs(x-cx)<60 && Math.abs(y-cy)<80){
@@ -193,7 +188,7 @@ timeStop=false;
 }
 });
 
-// ================= COLLISION =================
+// ================= HIT =================
 function hit(a,b){
 return Math.hypot(a.x-b.x,a.y-b.y)<a.r+b.r;
 }
@@ -214,11 +209,11 @@ time+=1/60;
 
 // spawn
 if(!timeStop){
-if(Math.random()<0.08)spawn();
+if(Math.random()<0.08)spawnBullet();
 if(Math.random()<0.02)special();
 }
 
-// card system
+// card timer
 cardTimer+=1/60;
 if(cardTimer>20 && !cardUI){
 cardTimer=0;
@@ -258,7 +253,7 @@ bullets=bullets.filter(b=>b.x>-100&&b.x<c.width+100);
 player.hp+=0.02;
 if(player.hp>player.maxHp)player.hp=player.maxHp;
 
-// death
+// game over
 if(player.hp<=0){
 gameOver=true;
 }
@@ -268,6 +263,7 @@ gameOver=true;
 function draw(){
 
 ctx.clearRect(0,0,c.width,c.height);
+ctx.font="16px Arial";
 
 // border
 ctx.strokeStyle="blue";
@@ -298,24 +294,24 @@ if(!started){
 ctx.fillText("START:"+Math.ceil(countdown),c.width/2,c.height/2);
 }
 
-// card UI
+// CARD UI
 if(cardUI){
 ctx.fillStyle="rgba(0,0,0,0.7)";
 ctx.fillRect(0,0,c.width,c.height);
 
 ctx.fillStyle="white";
-ctx.fillText("CHOOSE CARD",c.width/2-50,c.height/2-100);
+ctx.fillText("CHOOSE CARD",c.width/2-60,c.height/2-100);
 
 for(let i=0;i<cards.length;i++){
 let card=cards[i];
-let x=c.width/2-150+i*150;
+let x=c.width/2-140+i*140;
 let y=c.height/2;
 
-ctx.fillStyle=card.c;
+ctx.fillStyle=card[2];
 ctx.fillRect(x-50,y-60,100,120);
 
 ctx.fillStyle="white";
-ctx.fillText(card.n,x-45,y);
+ctx.fillText(card[1],x-45,y);
 }
 }
 }
