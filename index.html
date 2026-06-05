@@ -2,8 +2,8 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Roguelike Full</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Survival Roguelike</title>
 
 <style>
 html,body{
@@ -24,26 +24,54 @@ z-index:10;
 font-size:14px;
 }
 
-#hp{
-width:120px;
-height:10px;
-background:#333;
-border-radius:10px;
-overflow:hidden;
-display:inline-block;
-vertical-align:middle;
+#arena{
+position:absolute;
+border:3px solid #00f0ff;
+box-shadow:0 0 20px #00f0ff;
 }
 
-#hp-bar{
+#card-ui{
+position:fixed;
+bottom:10%;
+width:100%;
+display:none;
+justify-content:center;
+gap:10px;
+z-index:20;
+}
+
+.card{
+width:30%;
+height:200px;
+border-radius:15px;
+display:flex;
+flex-direction:column;
+justify-content:center;
+align-items:center;
+text-align:center;
+font-weight:bold;
+color:black;
+box-shadow:0 0 20px;
+}
+
+#timer-bar{
+position:fixed;
+top:40px;
+left:10px;
+width:200px;
+height:10px;
+background:#333;
+z-index:10;
+}
+
+#bar{
 height:100%;
 width:100%;
-background:red;
+background:linear-gradient(90deg,#00ffcc,#ff00ff);
 }
 
 canvas{
 display:block;
-margin:0 auto;
-background:#000;
 }
 </style>
 </head>
@@ -51,9 +79,12 @@ background:#000;
 <body>
 
 <div id="ui">
-TIME: <span id="time">0</span> |
-<div id="hp"><div id="hp-bar"></div></div>
+TIME: <span id="t">0</span>
 </div>
+
+<div id="timer-bar"><div id="bar"></div></div>
+
+<div id="card-ui"></div>
 
 <canvas id="c"></canvas>
 
@@ -67,76 +98,35 @@ c.width=window.innerWidth;
 c.height=window.innerHeight;
 player.x=c.width/2;
 player.y=c.height/2;
+updateArena();
 }
 window.addEventListener("resize",resize);
 
 // ================= PLAYER =================
 let player={
-x:0,y:0,r:10,hp:200,maxHp:200,speed:1
+x:0,y:0,r:10,hp:200,maxHp:200
 };
 resize();
+
+// ================= ARENA =================
+let ARENA={x:0,y:0,size:0};
+
+function updateArena(){
+ARENA.size = Math.min(c.width,c.height)*0.7;
+ARENA.x = c.width/2 - ARENA.size/2;
+ARENA.y = c.height/2 - ARENA.size/2;
+}
 
 // ================= GAME =================
 let bullets=[];
 let runTime=0;
 let spawn=0;
 
-// ================= CARD SYSTEM =================
-let deck=[];
+// ================= CARD =================
+let cardState=false;
+let cardTime=0;
+let cardMax=10;
 let hand=[];
-let cardUI=false;
-let timeStop=false;
-let cardTimer=0;
-
-// ================= INIT DECK =================
-function createDeck(){
-return [
-"HP","HP","HP","DEF","FAST","SHIELD","REVIVE",
-"SLOW","BOOST","DOT","ENEMY","HP40","HP80"
-];
-}
-
-function initDeck(){
-deck=createDeck();
-}
-initDeck();
-
-// ================= DRAW CARDS =================
-function drawCards(){
-hand=[];
-for(let i=0;i<3;i++){
-if(deck.length===0)initDeck();
-let i2=Math.floor(Math.random()*deck.length);
-hand.push(deck[i2]);
-deck.splice(i2,1);
-}
-}
-
-// ================= APPLY CARD =================
-function applyCard(c){
-
-switch(c){
-
-case "HP": player.hp+=30;break;
-case "HP40": player.hp+=80;break;
-case "HP80": player.hp+=160;break;
-
-case "DEF": player.def=1;break;
-case "FAST": player.speed*=1.2;break;
-
-case "SHIELD": player.inv=120;break;
-
-case "REVIVE":
-if(player.hp<=0) player.hp=60;
-break;
-
-case "SLOW": timeSlow=true;break;
-case "BOOST": regen=true;break;
-
-case "DOT": player.hp-=20;break;
-case "ENEMY": enemyBoost=true;break;
-}
-}
 
 // ================= TOUCH =================
 let drag=false,lx=0,ly=0;
@@ -148,9 +138,9 @@ lx=t.clientX;ly=t.clientY;
 });
 
 window.addEventListener("touchmove",e=>{
-if(!drag)return;
-let t=e.touches[0];
+if(!drag||cardState)return;
 
+let t=e.touches[0];
 player.x+=t.clientX-lx;
 player.y+=t.clientY-ly;
 
@@ -159,48 +149,121 @@ lx=t.clientX;ly=t.clientY;
 
 window.addEventListener("touchend",()=>drag=false);
 
-// ================= BULLETS =================
+// ================= CLAMP =================
+function clamp(){
+player.x=Math.max(ARENA.x+player.r,Math.min(ARENA.x+ARENA.size-player.r,player.x));
+player.y=Math.max(ARENA.y+player.r,Math.min(ARENA.y+ARENA.size-player.r,player.y));
+}
+
+// ================= BULLET =================
 function spawnBullet(){
 let x=Math.random()*c.width;
-let y=0;
+let y=-10;
 
-let angle=Math.atan2(player.y-y,player.x-x);
+let a=Math.atan2(player.y-y,player.x-x);
+
 let speed=2+runTime*0.02;
 
 bullets.push({
 x,y,
-vx:Math.cos(angle)*speed,
-vy:Math.sin(angle)*speed,
+vx:Math.cos(a)*speed,
+vy:Math.sin(a)*speed,
 r:4
 });
 }
 
-// ================= UPDATE =================
+// ================= CARD SYSTEM =================
+function createCards(){
+let pool=[
+{t:"HP",c:"#00ff66",d:"체력 회복"},
+{t:"HP2",c:"#00ccff",d:"중간 회복"},
+{t:"HP3",c:"#cc66ff",d:"대량 회복"},
+{t:"SHIELD",c:"#0099ff",d:"2초 무적"},
+{t:"FAST",c:"#00ff99",d:"이속 증가"},
+{t:"SLOW",c:"#aa00ff",d:"시간 느림"}
+];
+
+hand=[];
+for(let i=0;i<3;i++){
+hand.push(pool[Math.floor(Math.random()*pool.length)]);
+}
+}
+
+function openCard(){
+cardState=true;
+cardTime=0;
+
+createCards();
+
+let ui=document.getElementById("card-ui");
+ui.style.display="flex";
+ui.innerHTML="";
+
+hand.forEach(c=>{
+let d=document.createElement("div");
+d.className="card";
+d.style.background=c.c;
+
+d.innerHTML=`
+<div>${c.t}</div>
+<div style="font-size:12px">${c.d}</div>
+`;
+
+d.onclick=()=>{
+applyCard(c);
+closeCard();
+};
+
+ui.appendChild(d);
+});
+}
+
+function closeCard(){
+cardState=false;
+document.getElementById("card-ui").style.display="none";
+}
+
+// ================= APPLY =================
+function applyCard(c){
+switch(c.t){
+case "HP":player.hp+=40;break;
+case "HP2":player.hp+=80;break;
+case "HP3":player.hp+=160;break;
+case "SHIELD":player.inv=120;break;
+case "FAST":player.speed=1.2;break;
+case "SLOW":timeSlow=true;break;
+}
+}
+
+// ================= LOOP =================
 function update(){
 
 runTime+=1/60;
 spawn++;
 
-cardTimer+=1/60;
-
 // 카드 이벤트
-if(cardTimer>20 && !cardUI){
-cardTimer=0;
-cardUI=true;
-timeStop=true;
-drawCards();
+if(!cardState){
+cardTime+=1/60;
+if(cardTime>20){
+cardTime=0;
+openCard();
+}
+}
+
+// 정지
+if(cardState){
+document.getElementById("bar").style.width =
+((cardMax-cardTime)/cardMax*100)+"%";
+return;
 }
 
 // 탄막
-if(!timeStop){
-if(spawn%30===0)spawnBullet();
-}
+if(spawn%25===0) spawnBullet();
 
-// 플레이어 제한
-player.x=Math.max(0,Math.min(c.width,player.x));
-player.y=Math.max(0,Math.min(c.height,player.y));
+// 이동 제한
+clamp();
 
-// 탄막 이동
+// 충돌
 for(let b of bullets){
 b.x+=b.vx;
 b.y+=b.vy;
@@ -218,6 +281,11 @@ function draw(){
 
 ctx.clearRect(0,0,c.width,c.height);
 
+// ARENA
+ctx.strokeStyle="#00f0ff";
+ctx.lineWidth=3;
+ctx.strokeRect(ARENA.x,ARENA.y,ARENA.size,ARENA.size);
+
 // PLAYER
 ctx.fillStyle="white";
 ctx.beginPath();
@@ -231,59 +299,20 @@ ctx.beginPath();
 ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
 ctx.fill();
 }
-
-// CARD UI
-if(cardUI){
-ctx.fillStyle="rgba(0,0,0,0.8)";
-ctx.fillRect(0,0,c.width,c.height);
-
-ctx.fillStyle="white";
-ctx.fillText("CHOOSE CARD",c.width/2-50,c.height/2-60);
-
-for(let i=0;i<hand.length;i++){
-let x=c.width/2-100+i*100;
-let y=c.height/2;
-
-ctx.strokeStyle="cyan";
-ctx.strokeRect(x-30,y-30,60,60);
-
-ctx.fillText(hand[i],x-10,y);
 }
-}
-}
-
-// ================= INPUT CARD =================
-window.addEventListener("touchstart",e=>{
-if(!cardUI)return;
-
-let t=e.touches[0];
-
-for(let i=0;i<hand.length;i++){
-let x=c.width/2-100+i*100;
-let y=c.height/2;
-
-if(Math.abs(t.clientX-x)<50 && Math.abs(t.clientY-y)<50){
-applyCard(hand[i]);
-cardUI=false;
-timeStop=false;
-}
-}
-});
 
 // ================= LOOP =================
 function loop(){
 update();
 draw();
 
-document.getElementById("time").innerText=runTime.toFixed(1);
-document.getElementById("hp-bar").style.width=
-(player.hp/player.maxHp*100)+"%";
+document.getElementById("t").innerText=runTime.toFixed(1);
 
 requestAnimationFrame(loop);
 }
-
 loop();
 
 </script>
+
 </body>
 </html>
