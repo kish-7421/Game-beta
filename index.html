@@ -2,131 +2,237 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Stable Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Roguelike Full</title>
 
 <style>
-body{margin:0;overflow:hidden;background:black;}
+body{margin:0;overflow:hidden;background:#000;}
 canvas{display:block;}
+#ui{
+position:absolute;top:10px;left:10px;color:white;font-family:Arial;font-size:14px;
+}
 </style>
 </head>
 
 <body>
+
+<div id="ui">
+TIME: <span id="t">0</span> | HP: <span id="hp">200</span>
+</div>
+
 <canvas id="c"></canvas>
 
 <script>
-window.onload = function(){
-
 const c=document.getElementById("c");
 const ctx=c.getContext("2d");
 
-// ================= SAFE RESIZE FIRST =================
 function resize(){
 c.width=window.innerWidth;
 c.height=window.innerHeight;
-
 player.x=c.width/2;
 player.y=c.height/2;
 }
 window.addEventListener("resize",resize);
 
-// ================= PLAYER (AFTER CANVAS READY) =================
-let player={
-x:0,y:0,
-r:10,
-hp:100,
-maxHp:100
-};
-
-// NOW SAFE INIT
+// ================= PLAYER =================
+let player={x:0,y:0,r:10,hp:200,maxHp:200};
 resize();
 
 // ================= GAME =================
 let bullets=[];
+let particles=[];
 let time=0;
+let spawn=0;
 
-// ================= TOUCH =================
-window.addEventListener("touchmove",e=>{
-let t=e.touches[0];
-player.x=t.clientX;
-player.y=t.clientY;
-});
+// ================= CARD SYSTEM =================
+let deck=[];
+let hand=[];
+let cardUI=false;
+let timeStop=false;
+let cardTimer=0;
+let forcedPenalty=false;
 
-// ================= BULLET =================
-function spawn(){
-let s=2+Math.random()*2;
-bullets.push({
-x:Math.random()*c.width,
-y:0,
-vx:0,
-vy:s,
-r:5,
-dmg:5
-});
+// ================= ARENA =================
+const A={x:50,y:50,size:300};
+
+// ================= INIT DECK =================
+function initDeck(){
+deck=[
+{t:"HP20",r:"g"},{t:"HP40",r:"b"},{t:"HP80",r:"p"},
+{t:"DEF",r:"g"},{t:"SLOW",r:"b"},{t:"SHIELD",r:"b"},
+{t:"REVIVE",r:"p"},{t:"FAST",r:"g"},{t:"BOOST",r:"b"},
+{t:"ENEMY",r:"x"},{t:"DOT",r:"x"},{t:"SLOWP",r:"x"}
+];
+}
+initDeck();
+
+// ================= DRAW =================
+function drawCards(){
+hand=[];
+let pool=[...deck];
+
+for(let i=0;i<3;i++){
+
+let roll=Math.random();
+let r=roll<0.7?"g":roll<0.9?"b":roll<0.98?"p":"x";
+
+let f=pool.filter(c=>c.r===r);
+if(f.length==0) f=pool;
+
+let card=f[Math.floor(Math.random()*f.length)];
+hand.push(card);
+pool.splice(pool.indexOf(card),1);
+deck.splice(deck.indexOf(card),1);
 }
 
-// ================= HIT =================
-function hit(a,b){
-return Math.hypot(a.x-b.x,a.y-b.y)<a.r+b.r;
+if(deck.length==0){initDeck();player.hp+=50;}
+}
+
+// ================= APPLY =================
+function apply(c){
+switch(c.t){
+case "HP20":player.hp+=40;break;
+case "HP40":player.hp+=80;break;
+case "HP80":player.hp+=160;break;
+case "DEF":break;
+case "SLOW":break;
+case "SHIELD":player.inv=60;break;
+case "REVIVE":player.hp=60;break;
+case "FAST":break;
+case "BOOST":break;
+case "ENEMY":break;
+case "DOT":player.hp-=30;break;
+case "SLOWP":break;
+}
+}
+
+// ================= TOUCH =================
+let drag=false,lx=0,ly=0;
+
+c.addEventListener("touchstart",e=>{
+drag=true;
+let t=e.touches[0];
+lx=t.clientX;ly=t.clientY;
+});
+
+window.addEventListener("touchmove",e=>{
+if(!drag) return;
+let t=e.touches[0];
+player.x+=t.clientX-lx;
+player.y+=t.clientY-ly;
+lx=t.clientX;ly=t.clientY;
+});
+
+window.addEventListener("touchend",()=>drag=false);
+
+// ================= BULLET =================
+function spawnBullet(){
+let x=Math.random()*c.width;
+let y=0;
+let a=Math.atan2(player.y-y,player.x-x);
+bullets.push({x,y,vx:Math.cos(a)*3,vy:Math.sin(a)*3,r:4});
+}
+
+// ================= SPECIAL =================
+function special(){
+for(let i=0;i<10;i++){
+let a=i*Math.PI*2/10;
+bullets.push({x:c.width/2,y:c.height/2,vx:Math.cos(a)*3,vy:Math.sin(a)*3,r:5});
+}
 }
 
 // ================= UPDATE =================
 function update(){
 
-time++;
+time+=1/60;
+spawn++;
 
-if(Math.random()<0.1)spawn();
+if(!timeStop){
+if(spawn%30==0) spawnBullet();
+if(spawn%180==0) special();
+}
 
+// CARD SYSTEM
+cardTimer+=1/60;
+if(cardTimer>20 && !cardUI){
+cardTimer=0;
+cardUI=true;
+timeStop=true;
+drawCards();
+}
+
+// MOVE LIMIT
+player.x=Math.max(A.x,Math.min(c.width-A.x,player.x));
+player.y=Math.max(A.y,Math.min(c.height-A.x,player.y));
+
+// BULLETS
 bullets.forEach(b=>{
-b.y+=b.vy;
-
-if(hit(player,b)){
-player.hp-=b.dmg;
-b.x=-999;
+b.x+=b.vx;b.y+=b.vy;
+if(Math.hypot(b.x-player.x,b.y-player.y)<10){
+player.hp-=10;
 }
 });
 
-bullets=bullets.filter(b=>b.y<c.height+100);
+bullets=bullets.filter(b=>b.x>-100&&b.x<c.width+100);
 
-if(player.hp<=0){
-alert("GAME OVER");
-}
+// HP
+if(player.hp<0)player.hp=0;
 }
 
 // ================= DRAW =================
 function draw(){
 
 ctx.clearRect(0,0,c.width,c.height);
-ctx.font="16px Arial";
 
-// player
+// ARENA
+ctx.strokeStyle="#00f0ff";
+ctx.strokeRect(A.x,A.y,c.width-A.x*2,c.height-A.y*2);
+
+// PLAYER
 ctx.fillStyle="white";
 ctx.beginPath();
-ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+ctx.arc(player.x,player.y,10,0,Math.PI*2);
 ctx.fill();
 
-// bullets
-ctx.fillStyle="orange";
+// BULLETS
+ctx.fillStyle="red";
 bullets.forEach(b=>{
 ctx.beginPath();
 ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
 ctx.fill();
 });
 
+// CARD UI
+if(cardUI){
+ctx.fillStyle="rgba(0,0,0,0.7)";
+ctx.fillRect(0,0,c.width,c.height);
+
 ctx.fillStyle="white";
-ctx.fillText("HP:"+player.hp,10,20);
+ctx.fillText("CHOOSE CARD",c.width/2-40,c.height/2-80);
+
+for(let i=0;i<hand.length;i++){
+let x=c.width/2-120+i*120;
+let y=c.height/2;
+
+ctx.fillStyle="blue";
+ctx.fillRect(x-40,y-40,80,80);
+
+ctx.fillStyle="white";
+ctx.fillText(hand[i].t,x-20,y);
+}
+}
 }
 
 // ================= LOOP =================
 function loop(){
 update();
 draw();
+document.getElementById("t").innerText=time.toFixed(1);
+document.getElementById("hp").innerText=player.hp;
 requestAnimationFrame(loop);
 }
 loop();
 
-};
 </script>
-
 </body>
 </html>
