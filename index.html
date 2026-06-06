@@ -2,22 +2,27 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport"
+content="width=device-width,
+initial-scale=1.0">
 
-<title>Ultimate Bullet Survival</title>
+<title>
+Ultimate Bullet Survival
+</title>
 
 <style>
 
 body{
-    margin:0;
-    overflow:hidden;
-    background:#000;
+margin:0;
+overflow:hidden;
+background:black;
+touch-action:none;
 }
 
 canvas{
-    display:block;
-    margin:auto;
-    background:#000;
+display:block;
+margin:auto;
+background:black;
 }
 
 </style>
@@ -29,23 +34,33 @@ canvas{
 
 <script>
 
-const canvas =
-document.getElementById("game");
+const canvas=
+document.getElementById(
+"game"
+);
 
-const ctx =
-canvas.getContext("2d");
+const ctx=
+canvas.getContext(
+"2d"
+);
 
-canvas.width = 1280;
-canvas.height = 720;
+// 모바일 세로형
 
-const WIDTH = canvas.width;
-const HEIGHT = canvas.height;
+canvas.width=450;
+canvas.height=900;
+
+const WIDTH=
+canvas.width;
+
+const HEIGHT=
+canvas.height;
 
 // =====================
 // 게임 상태
 // =====================
 
 let gameStarted=false;
+
 let gameOver=false;
 
 let surviveTime=0;
@@ -58,33 +73,13 @@ let frame=0;
 
 const arena={
 
-x:80,
-y:60,
+x:75,
+y:40,
 
-w:1120,
-h:600
+w:300,
+h:820
 
 };
-
-// =====================
-// 입력
-// =====================
-
-const keys={};
-
-window.addEventListener(
-"keydown",
-e=>{
-keys[e.key.toLowerCase()]=true;
-}
-);
-
-window.addEventListener(
-"keyup",
-e=>{
-keys[e.key.toLowerCase()]=false;
-}
-);
 
 // =====================
 // 플레이어
@@ -93,6 +88,7 @@ keys[e.key.toLowerCase()]=false;
 const player={
 
 x:WIDTH/2,
+
 y:HEIGHT/2,
 
 r:12,
@@ -106,6 +102,7 @@ speed:4
 // =====================
 
 let maxHp=100;
+
 let hp=100;
 
 // =====================
@@ -121,18 +118,23 @@ let dodgeChance=0;
 let invincible=false;
 
 let reviveUnlocked=false;
+
 let reviveUsed=false;
 
 let shieldUnlocked=false;
+
 let shieldActive=false;
 
 let slowFieldUnlocked=false;
+
 let slowFieldActive=false;
 
 let healCrossUnlocked=false;
 
 let passiveHealGreen=false;
+
 let passiveHealBlue=false;
+
 let passiveHealPurple=false;
 
 let periodicHealUnlocked=false;
@@ -164,23 +166,35 @@ let currentCards=[];
 // =====================
 
 function distance(
-x1,y1,
-x2,y2
+
+x1,
+y1,
+
+x2,
+y2
+
 ){
 
-const dx=x1-x2;
-const dy=y1-y2;
+const dx=
+x1-x2;
+
+const dy=
+y1-y2;
 
 return Math.sqrt(
+
 dx*dx+
 dy*dy
+
 );
 
 }
 
 function circleCollision(
+
 a,
 b
+
 ){
 
 return distance(
@@ -198,24 +212,124 @@ b.y
 a.r+b.r;
 
 }// =====================
+// 모바일 터치
+// =====================
+
+let touchActive=false;
+
+let touchX=0;
+
+let touchY=0;
+
+canvas.addEventListener(
+
+"touchstart",
+
+e=>{
+
+const rect=
+canvas.getBoundingClientRect();
+
+touchX=
+
+e.touches[0].clientX
+-
+rect.left;
+
+touchY=
+
+e.touches[0].clientY
+-
+rect.top;
+
+touchActive=true;
+
+}
+
+);
+
+canvas.addEventListener(
+
+"touchmove",
+
+e=>{
+
+const rect=
+canvas.getBoundingClientRect();
+
+touchX=
+
+e.touches[0].clientX
+-
+rect.left;
+
+touchY=
+
+e.touches[0].clientY
+-
+rect.top;
+
+}
+
+);
+
+canvas.addEventListener(
+
+"touchend",
+
+()=>{
+
+touchActive=false;
+
+}
+
+);
+
+// =====================
 // 플레이어 이동
 // =====================
 
 function updatePlayer(){
 
-if(keys["w"])
-player.y-=player.speed;
+if(touchActive){
 
-if(keys["s"])
-player.y+=player.speed;
+let dx=
+touchX-player.x;
 
-if(keys["a"])
-player.x-=player.speed;
+let dy=
+touchY-player.y;
 
-if(keys["d"])
-player.x+=player.speed;
+let dist=
+Math.sqrt(
 
-// 벽 충돌
+dx*dx+
+dy*dy
+
+);
+
+if(dist>2){
+
+player.x+=
+
+(dx/dist)
+*
+player.speed
+*
+1.8;
+
+player.y+=
+
+(dy/dist)
+*
+player.speed
+*
+1.8;
+
+}
+
+}
+
+// 벽 데미지
 
 if(
 player.x-player.r
@@ -284,283 +398,6 @@ damagePlayer(
 );
 
 }
-
-}// =====================
-// 피해
-// =====================
-
-let lastHitTime=
-Date.now();
-
-function damagePlayer(
-amount
-){
-
-lastHitTime=
-Date.now();
-
-if(
-Math.random()
-<
-dodgeChance
-)
-return;
-
-if(
-invincible
-)
-return;
-
-if(
-shieldActive
-)
-return;
-
-hp-=
-amount*
-damageMultiplier;
-
-if(
-hp<0
-)
-hp=0;
-
-}// =====================
-// 부활
-// =====================
-
-function handleRevive(){
-
-if(
-hp>0
-)
-return;
-
-if(
-
-reviveUnlocked
-
-&&
-
-!reviveUsed
-
-){
-
-reviveUsed=true;
-
-hp=maxHp*0.3;
-
-invincible=true;
-
-setTimeout(()=>{
-
-invincible=false;
-
-},2000);
-
-return;
-
-}
-
-gameOver=true;
-
-}// =====================
-// 보호막
-// =====================
-
-setInterval(()=>{
-
-if(
-!shieldUnlocked
-)
-return;
-
-shieldActive=true;
-
-setTimeout(()=>{
-
-shieldActive=false;
-
-},2000);
-
-},30000);
-
-function drawShield(){
-
-if(
-!shieldActive
-)
-return;
-
-ctx.beginPath();
-
-ctx.arc(
-
-player.x,
-player.y,
-
-player.r+18,
-
-0,
-Math.PI*2
-
-);
-
-ctx.strokeStyle=
-"#66ffff";
-
-ctx.lineWidth=4;
-
-ctx.stroke();
-
-}// =====================
-// 경기장
-// =====================
-
-function drawArena(){
-
-ctx.strokeStyle=
-"#3399ff";
-
-ctx.lineWidth=5;
-
-ctx.strokeRect(
-
-arena.x,
-arena.y,
-
-arena.w,
-arena.h
-
-);
-
-  }// =====================
-// 플레이어
-// =====================
-
-function drawPlayer(){
-
-ctx.beginPath();
-
-ctx.arc(
-
-player.x,
-player.y,
-
-player.r,
-
-0,
-Math.PI*2
-
-);
-
-ctx.fillStyle=
-"white";
-
-ctx.shadowBlur=15;
-ctx.shadowColor="white";
-
-ctx.fill();
-
-ctx.shadowBlur=0;
-
-}// =====================
-// HP 바
-// =====================
-
-function drawHpBar(){
-
-ctx.fillStyle=
-"#333";
-
-ctx.fillRect(
-20,
-20,
-320,
-24
-);
-
-ctx.fillStyle=
-"lime";
-
-ctx.fillRect(
-20,
-20,
-
-320*
-(hp/maxHp),
-
-24
-);
-
-ctx.strokeStyle=
-"white";
-
-ctx.strokeRect(
-20,
-20,
-320,
-24
-);
-
-ctx.fillStyle=
-"white";
-
-ctx.font=
-"18px Arial";
-
-ctx.fillText(
-
-"HP "
-+
-Math.floor(hp)
-+
-"/"
-+
-maxHp,
-
-25,
-65
-
-);
-
-}// =====================
-// 시간
-// =====================
-
-setInterval(()=>{
-
-if(
-gameOver
-||
-cardMenu
-||
-!gameStarted
-)
-return;
-
-surviveTime++;
-
-},1000);
-
-function drawTime(){
-
-ctx.fillStyle=
-"white";
-
-ctx.font=
-"24px Arial";
-
-ctx.fillText(
-
-"TIME : "
-+
-surviveTime,
-
-WIDTH-170,
-40
-
-);
 
 }// =====================
 // 탄 생성
