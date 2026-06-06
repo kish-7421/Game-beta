@@ -2,317 +2,2858 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Survival Roguelike</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Ultimate Bullet Survival</title>
 
 <style>
-html,body{
-margin:0;
-padding:0;
-overflow:hidden;
-background:#000;
-touch-action:none;
-font-family:Arial;
-}
 
-#ui{
-position:fixed;
-top:10px;
-left:10px;
-color:white;
-z-index:10;
-font-size:14px;
-}
-
-#arena{
-position:absolute;
-border:3px solid #00f0ff;
-box-shadow:0 0 20px #00f0ff;
-}
-
-#card-ui{
-position:fixed;
-bottom:10%;
-width:100%;
-display:none;
-justify-content:center;
-gap:10px;
-z-index:20;
-}
-
-.card{
-width:30%;
-height:200px;
-border-radius:15px;
-display:flex;
-flex-direction:column;
-justify-content:center;
-align-items:center;
-text-align:center;
-font-weight:bold;
-color:black;
-box-shadow:0 0 20px;
-}
-
-#timer-bar{
-position:fixed;
-top:40px;
-left:10px;
-width:200px;
-height:10px;
-background:#333;
-z-index:10;
-}
-
-#bar{
-height:100%;
-width:100%;
-background:linear-gradient(90deg,#00ffcc,#ff00ff);
+body{
+    margin:0;
+    overflow:hidden;
+    background:#000;
 }
 
 canvas{
-display:block;
+    display:block;
+    margin:auto;
+    background:#000;
 }
-</style>
-</head>
 
+</style>
+
+</head>
 <body>
 
-<div id="ui">
-TIME: <span id="t">0</span>
-</div>
-
-<div id="timer-bar"><div id="bar"></div></div>
-
-<div id="card-ui"></div>
-
-<canvas id="c"></canvas>
+<canvas id="game"></canvas>
 
 <script>
 
-const c=document.getElementById("c");
-const ctx=c.getContext("2d");
+const canvas =
+document.getElementById("game");
 
-function resize(){
-c.width=window.innerWidth;
-c.height=window.innerHeight;
-player.x=c.width/2;
-player.y=c.height/2;
-updateArena();
-}
-window.addEventListener("resize",resize);
+const ctx =
+canvas.getContext("2d");
 
-// ================= PLAYER =================
-let player={
-x:0,y:0,r:10,hp:200,maxHp:200
+canvas.width = 1280;
+canvas.height = 720;
+
+const WIDTH = canvas.width;
+const HEIGHT = canvas.height;
+
+// =====================
+// 게임 상태
+// =====================
+
+let gameStarted=false;
+let gameOver=false;
+
+let surviveTime=0;
+
+let frame=0;
+
+// =====================
+// 경기장
+// =====================
+
+const arena={
+
+x:80,
+y:60,
+
+w:1120,
+h:600
+
 };
-resize();
 
-// ================= ARENA =================
-let ARENA={x:0,y:0,size:0};
+// =====================
+// 입력
+// =====================
 
-function updateArena(){
-ARENA.size = Math.min(c.width,c.height)*0.7;
-ARENA.x = c.width/2 - ARENA.size/2;
-ARENA.y = c.height/2 - ARENA.size/2;
+const keys={};
+
+window.addEventListener(
+"keydown",
+e=>{
+keys[e.key.toLowerCase()]=true;
+}
+);
+
+window.addEventListener(
+"keyup",
+e=>{
+keys[e.key.toLowerCase()]=false;
+}
+);
+
+// =====================
+// 플레이어
+// =====================
+
+const player={
+
+x:WIDTH/2,
+y:HEIGHT/2,
+
+r:12,
+
+speed:4
+
+};
+
+// =====================
+// HP
+// =====================
+
+let maxHp=100;
+let hp=100;
+
+// =====================
+// 능력
+// =====================
+
+let damageMultiplier=1;
+
+let enemySpeedMultiplier=1;
+
+let dodgeChance=0;
+
+let invincible=false;
+
+let reviveUnlocked=false;
+let reviveUsed=false;
+
+let shieldUnlocked=false;
+let shieldActive=false;
+
+let slowFieldUnlocked=false;
+let slowFieldActive=false;
+
+let healCrossUnlocked=false;
+
+let passiveHealGreen=false;
+let passiveHealBlue=false;
+let passiveHealPurple=false;
+
+let periodicHealUnlocked=false;
+
+let shrinkUnlocked=false;
+
+let lowHpSlowUsed=false;
+
+// =====================
+// 오브젝트
+// =====================
+
+const bullets=[];
+
+const healCrosses=[];
+
+// =====================
+// 카드
+// =====================
+
+let cardMenu=false;
+
+let cardCountdown=10;
+
+let currentCards=[];
+
+// =====================
+// 거리
+// =====================
+
+function distance(
+x1,y1,
+x2,y2
+){
+
+const dx=x1-x2;
+const dy=y1-y2;
+
+return Math.sqrt(
+dx*dx+
+dy*dy
+);
+
 }
 
-// ================= GAME =================
-let bullets=[];
-let runTime=0;
-let spawn=0;
+function circleCollision(
+a,
+b
+){
 
-// ================= CARD =================
-let cardState=false;
-let cardTime=0;
-let cardMax=10;
-let hand=[];
+return distance(
 
-// ================= TOUCH =================
-let drag=false,lx=0,ly=0;
+a.x,
+a.y,
 
-c.addEventListener("touchstart",e=>{
-drag=true;
-let t=e.touches[0];
-lx=t.clientX;ly=t.clientY;
-});
+b.x,
+b.y
 
-window.addEventListener("touchmove",e=>{
-if(!drag||cardState)return;
+)
 
-let t=e.touches[0];
-player.x+=t.clientX-lx;
-player.y+=t.clientY-ly;
+<
 
-lx=t.clientX;ly=t.clientY;
-});
+a.r+b.r;
 
-window.addEventListener("touchend",()=>drag=false);
+}// =====================
+// 플레이어 이동
+// =====================
 
-// ================= CLAMP =================
-function clamp(){
-player.x=Math.max(ARENA.x+player.r,Math.min(ARENA.x+ARENA.size-player.r,player.x));
-player.y=Math.max(ARENA.y+player.r,Math.min(ARENA.y+ARENA.size-player.r,player.y));
+function updatePlayer(){
+
+if(keys["w"])
+player.y-=player.speed;
+
+if(keys["s"])
+player.y+=player.speed;
+
+if(keys["a"])
+player.x-=player.speed;
+
+if(keys["d"])
+player.x+=player.speed;
+
+// 벽 충돌
+
+if(
+player.x-player.r
+<
+arena.x
+){
+
+player.x=
+arena.x+
+player.r;
+
+damagePlayer(
+0.03
+);
+
 }
 
-// ================= BULLET =================
-function spawnBullet(){
-let x=Math.random()*c.width;
-let y=-10;
+if(
+player.x+player.r
+>
+arena.x+
+arena.w
+){
 
-let a=Math.atan2(player.y-y,player.x-x);
+player.x=
+arena.x+
+arena.w-
+player.r;
 
-let speed=2+runTime*0.02;
+damagePlayer(
+0.03
+);
+
+}
+
+if(
+player.y-player.r
+<
+arena.y
+){
+
+player.y=
+arena.y+
+player.r;
+
+damagePlayer(
+0.03
+);
+
+}
+
+if(
+player.y+player.r
+>
+arena.y+
+arena.h
+){
+
+player.y=
+arena.y+
+arena.h-
+player.r;
+
+damagePlayer(
+0.03
+);
+
+}
+
+}// =====================
+// 피해
+// =====================
+
+let lastHitTime=
+Date.now();
+
+function damagePlayer(
+amount
+){
+
+lastHitTime=
+Date.now();
+
+if(
+Math.random()
+<
+dodgeChance
+)
+return;
+
+if(
+invincible
+)
+return;
+
+if(
+shieldActive
+)
+return;
+
+hp-=
+amount*
+damageMultiplier;
+
+if(
+hp<0
+)
+hp=0;
+
+}// =====================
+// 부활
+// =====================
+
+function handleRevive(){
+
+if(
+hp>0
+)
+return;
+
+if(
+
+reviveUnlocked
+
+&&
+
+!reviveUsed
+
+){
+
+reviveUsed=true;
+
+hp=maxHp*0.3;
+
+invincible=true;
+
+setTimeout(()=>{
+
+invincible=false;
+
+},2000);
+
+return;
+
+}
+
+gameOver=true;
+
+}// =====================
+// 보호막
+// =====================
+
+setInterval(()=>{
+
+if(
+!shieldUnlocked
+)
+return;
+
+shieldActive=true;
+
+setTimeout(()=>{
+
+shieldActive=false;
+
+},2000);
+
+},30000);
+
+function drawShield(){
+
+if(
+!shieldActive
+)
+return;
+
+ctx.beginPath();
+
+ctx.arc(
+
+player.x,
+player.y,
+
+player.r+18,
+
+0,
+Math.PI*2
+
+);
+
+ctx.strokeStyle=
+"#66ffff";
+
+ctx.lineWidth=4;
+
+ctx.stroke();
+
+}// =====================
+// 경기장
+// =====================
+
+function drawArena(){
+
+ctx.strokeStyle=
+"#3399ff";
+
+ctx.lineWidth=5;
+
+ctx.strokeRect(
+
+arena.x,
+arena.y,
+
+arena.w,
+arena.h
+
+);
+
+  }// =====================
+// 플레이어
+// =====================
+
+function drawPlayer(){
+
+ctx.beginPath();
+
+ctx.arc(
+
+player.x,
+player.y,
+
+player.r,
+
+0,
+Math.PI*2
+
+);
+
+ctx.fillStyle=
+"white";
+
+ctx.shadowBlur=15;
+ctx.shadowColor="white";
+
+ctx.fill();
+
+ctx.shadowBlur=0;
+
+}// =====================
+// HP 바
+// =====================
+
+function drawHpBar(){
+
+ctx.fillStyle=
+"#333";
+
+ctx.fillRect(
+20,
+20,
+320,
+24
+);
+
+ctx.fillStyle=
+"lime";
+
+ctx.fillRect(
+20,
+20,
+
+320*
+(hp/maxHp),
+
+24
+);
+
+ctx.strokeStyle=
+"white";
+
+ctx.strokeRect(
+20,
+20,
+320,
+24
+);
+
+ctx.fillStyle=
+"white";
+
+ctx.font=
+"18px Arial";
+
+ctx.fillText(
+
+"HP "
++
+Math.floor(hp)
++
+"/"
++
+maxHp,
+
+25,
+65
+
+);
+
+}// =====================
+// 시간
+// =====================
+
+setInterval(()=>{
+
+if(
+gameOver
+||
+cardMenu
+||
+!gameStarted
+)
+return;
+
+surviveTime++;
+
+},1000);
+
+function drawTime(){
+
+ctx.fillStyle=
+"white";
+
+ctx.font=
+"24px Arial";
+
+ctx.fillText(
+
+"TIME : "
++
+surviveTime,
+
+WIDTH-170,
+40
+
+);
+
+}// =====================
+// 탄 생성
+// =====================
+
+function createBullet(
+x,
+y,
+vx,
+vy,
+r,
+color,
+damage
+){
 
 bullets.push({
-x,y,
-vx:Math.cos(a)*speed,
-vy:Math.sin(a)*speed,
-r:4
+
+x,
+y,
+
+vx,
+vy,
+
+r,
+
+color,
+
+damage
+
 });
+
 }
 
-// ================= CARD SYSTEM =================
-function createCards(){
-let pool=[
-{t:"HP",c:"#00ff66",d:"체력 회복"},
-{t:"HP2",c:"#00ccff",d:"중간 회복"},
-{t:"HP3",c:"#cc66ff",d:"대량 회복"},
-{t:"SHIELD",c:"#0099ff",d:"2초 무적"},
-{t:"FAST",c:"#00ff99",d:"이속 증가"},
-{t:"SLOW",c:"#aa00ff",d:"시간 느림"}
+function shootAtPlayer(
+x,
+y,
+speed,
+size,
+color,
+damage
+){
+
+const angle=
+Math.atan2(
+
+player.y-y,
+
+player.x-x
+
+);
+
+createBullet(
+
+x,
+y,
+
+Math.cos(angle)*speed,
+
+Math.sin(angle)*speed,
+
+size,
+
+color,
+
+damage
+
+);
+
+}// =====================
+// 탄 업데이트
+// =====================
+
+function updateBullets(){
+
+for(
+let i=
+bullets.length-1;
+i>=0;
+i--
+){
+
+const b=
+bullets[i];
+
+b.x+=
+b.vx*
+enemySpeedMultiplier;
+
+b.y+=
+b.vy*
+enemySpeedMultiplier;
+
+if(
+circleCollision(
+player,
+b
+)
+){
+
+damagePlayer(
+b.damage
+);
+
+bullets.splice(
+i,
+1
+);
+
+continue;
+
+}
+
+if(
+
+b.x<-300 ||
+
+b.x>WIDTH+300 ||
+
+b.y<-300 ||
+
+b.y>HEIGHT+300
+
+){
+
+bullets.splice(
+i,
+1
+);
+
+}
+
+}
+
+}// =====================
+// 탄 그리기
+// =====================
+
+function drawBullets(){
+
+for(
+const b
+of bullets
+){
+
+ctx.beginPath();
+
+ctx.arc(
+
+b.x,
+b.y,
+
+b.r,
+
+0,
+Math.PI*2
+
+);
+
+ctx.fillStyle=
+b.color;
+
+ctx.fill();
+
+}
+
+}// =====================
+// 패턴 1~5
+// =====================
+
+function pattern1(){
+
+shootAtPlayer(
+
+arena.x-20,
+
+arena.y+
+Math.random()*arena.h,
+
+5,
+
+8,
+
+"red",
+
+5
+
+);
+
+}
+
+function pattern2(){
+
+shootAtPlayer(
+
+arena.x+
+arena.w+
+20,
+
+arena.y+
+Math.random()*arena.h,
+
+5,
+
+8,
+
+"red",
+
+5
+
+);
+
+}
+
+function pattern3(){
+
+shootAtPlayer(
+
+arena.x+
+Math.random()*arena.w,
+
+arena.y-20,
+
+5,
+
+8,
+
+"orange",
+
+5
+
+);
+
+}
+
+function pattern4(){
+
+shootAtPlayer(
+
+arena.x+
+Math.random()*arena.w,
+
+arena.y+
+arena.h+
+20,
+
+5,
+
+8,
+
+"orange",
+
+5
+
+);
+
+}
+
+function pattern5(){
+
+const x=
+arena.x-20;
+
+const y=
+arena.y+
+Math.random()*arena.h;
+
+const base=
+Math.atan2(
+
+player.y-y,
+
+player.x-x
+
+);
+
+for(
+let i=-3;
+i<=3;
+i++
+){
+
+createBullet(
+
+x,
+y,
+
+Math.cos(
+base+i*0.15
+)*4,
+
+Math.sin(
+base+i*0.15
+)*4,
+
+7,
+
+"yellow",
+
+4
+
+);
+
+}
+
+}// =====================
+// 패턴 6~10
+// =====================
+
+function pattern6(){
+
+for(
+let a=0;
+a<
+Math.PI*2;
+a+=
+Math.PI/12
+){
+
+createBullet(
+
+WIDTH/2,
+HEIGHT/2,
+
+Math.cos(a)*4,
+
+Math.sin(a)*4,
+
+8,
+
+"cyan",
+
+5
+
+);
+
+}
+
+}
+
+function pattern7(){
+
+for(
+let x=
+arena.x;
+x<
+arena.x+
+arena.w;
+x+=80
+){
+
+createBullet(
+
+x,
+
+arena.y-10,
+
+0,
+
+6,
+
+6,
+
+"lime",
+
+4
+
+);
+
+}
+
+}
+
+function pattern8(){
+
+for(
+let y=
+arena.y;
+y<
+arena.y+
+arena.h;
+y+=80
+){
+
+createBullet(
+
+arena.x-10,
+
+y,
+
+6,
+
+0,
+
+6,
+
+"lime",
+
+4
+
+);
+
+}
+
+}
+
+function pattern9(){
+
+createBullet(
+
+arena.x-30,
+
+arena.y+
+Math.random()*arena.h,
+
+3,
+
+0,
+
+20,
+
+"purple",
+
+12
+
+);
+
+}
+
+function pattern10(){
+
+createBullet(
+
+arena.x-10,
+
+arena.y+
+Math.random()*arena.h,
+
+12,
+
+0,
+
+5,
+
+"white",
+
+4
+
+);
+
+  }// =====================
+// 패턴 11~15
+// =====================
+
+function pattern11(){
+
+for(
+let i=0;
+i<8;
+i++
+){
+
+const a=
+i*Math.PI/4;
+
+createBullet(
+
+WIDTH/2,
+HEIGHT/2,
+
+Math.cos(a)*5,
+
+Math.sin(a)*5,
+
+7,
+
+"#00ffff",
+
+5
+
+);
+
+}
+
+}
+
+function pattern12(){
+
+const corners=[
+
+[arena.x,arena.y],
+[arena.x+arena.w,arena.y],
+[arena.x,arena.y+arena.h],
+[arena.x+arena.w,arena.y+arena.h]
+
 ];
 
-hand=[];
-for(let i=0;i<3;i++){
-hand.push(pool[Math.floor(Math.random()*pool.length)]);
+const c=
+
+corners[
+Math.floor(
+Math.random()*4
+)
+];
+
+shootAtPlayer(
+
+c[0],
+c[1],
+
+6,
+
+8,
+
+"pink",
+
+6
+
+);
+
+}
+
+function pattern13(){
+
+const x=
+
+arena.x+
+Math.random()*arena.w;
+
+for(
+let i=0;
+i<5;
+i++
+){
+
+createBullet(
+
+x,
+
+arena.y-
+20-
+i*50,
+
+0,
+
+5,
+
+8,
+
+"gold",
+
+5
+
+);
+
+}
+
+}
+
+function pattern14(){
+
+for(
+let a=0;
+a<
+Math.PI*2;
+a+=
+Math.PI/18
+){
+
+createBullet(
+
+WIDTH/2,
+HEIGHT/2,
+
+Math.cos(a)*7,
+
+Math.sin(a)*7,
+
+5,
+
+"#44aaff",
+
+5
+
+);
+
+}
+
+}
+
+function pattern15(){
+
+for(
+let i=0;
+i<20;
+i++
+){
+
+createBullet(
+
+arena.x+
+Math.random()*arena.w,
+
+arena.y-20,
+
+(
+Math.random()-0.5
+)*2,
+
+4+
+Math.random()*3,
+
+5,
+
+"red",
+
+4
+
+);
+
+}
+
+}// =====================
+// 랜덤 일반 공격
+// =====================
+
+function randomPattern(){
+
+const id=
+
+Math.floor(
+Math.random()*15
+)+1;
+
+switch(id){
+
+case 1: pattern1(); break;
+case 2: pattern2(); break;
+case 3: pattern3(); break;
+case 4: pattern4(); break;
+case 5: pattern5(); break;
+case 6: pattern6(); break;
+case 7: pattern7(); break;
+case 8: pattern8(); break;
+case 9: pattern9(); break;
+case 10: pattern10(); break;
+case 11: pattern11(); break;
+case 12: pattern12(); break;
+case 13: pattern13(); break;
+case 14: pattern14(); break;
+case 15: pattern15(); break;
+
+}
+
+}
+
+setInterval(()=>{
+
+if(
+gameOver
+||
+cardMenu
+||
+!gameStarted
+)
+return;
+
+randomPattern();
+
+},700);// =====================
+// 특수공격 1
+// 초대형 원형 폭발
+// =====================
+
+function special1(){
+
+for(
+let a=0;
+a<
+Math.PI*2;
+a+=
+Math.PI/40
+){
+
+createBullet(
+
+WIDTH/2,
+HEIGHT/2,
+
+Math.cos(a)*8,
+
+Math.sin(a)*8,
+
+12,
+
+"#00ffff",
+
+10
+
+);
+
+}
+
+}
+
+// =====================
+// 특수공격 2
+// 나선탄
+// =====================
+
+let spiralAngle=0;
+
+function special2(){
+
+for(
+let i=0;
+i<50;
+i++
+){
+
+const a=
+spiralAngle+
+i*0.2;
+
+createBullet(
+
+WIDTH/2,
+HEIGHT/2,
+
+Math.cos(a)*5,
+
+Math.sin(a)*5,
+
+7,
+
+"#ff00ff",
+
+8
+
+);
+
+}
+
+spiralAngle+=0.5;
+
+}// =====================
+// 특수공격 3
+// 외곽 수렴
+// =====================
+
+function special3(){
+
+for(
+let i=0;
+i<120;
+i++
+){
+
+const a=
+Math.random()
+*Math.PI*2;
+
+const x=
+WIDTH/2+
+Math.cos(a)*500;
+
+const y=
+HEIGHT/2+
+Math.sin(a)*350;
+
+createBullet(
+
+x,
+y,
+
+-Math.cos(a)*3,
+
+-Math.sin(a)*3,
+
+9,
+
+"purple",
+
+10
+
+);
+
+}
+
+}
+
+// =====================
+// 특수공격 4
+// 십자포
+// =====================
+
+function special4(){
+
+for(
+let i=0;
+i<30;
+i++
+){
+
+createBullet(
+WIDTH/2,
+HEIGHT/2,
+10,
+0,
+8,
+"red",
+8
+);
+
+createBullet(
+WIDTH/2,
+HEIGHT/2,
+-10,
+0,
+8,
+"red",
+8
+);
+
+createBullet(
+WIDTH/2,
+HEIGHT/2,
+0,
+10,
+8,
+"red",
+8
+);
+
+createBullet(
+WIDTH/2,
+HEIGHT/2,
+0,
+-10,
+8,
+"red",
+8
+);
+
+}
+
+}// =====================
+// 특수공격 5
+// 별폭발
+// =====================
+
+function special5(){
+
+for(
+let i=0;
+i<5;
+i++
+){
+
+const a=
+i*
+(Math.PI*2/5);
+
+for(
+let j=0;
+j<12;
+j++
+){
+
+createBullet(
+
+WIDTH/2,
+HEIGHT/2,
+
+Math.cos(
+a+j*0.5
+)*7,
+
+Math.sin(
+a+j*0.5
+)*7,
+
+7,
+
+"gold",
+
+8
+
+);
+
+}
+
+}
+
+}
+
+// =====================
+// 특수공격 6
+// 폭우
+// =====================
+
+function special6(){
+
+for(
+let i=0;
+i<150;
+i++
+){
+
+createBullet(
+
+Math.random()
+*WIDTH,
+
+-50-
+Math.random()*300,
+
+0,
+
+8,
+
+6,
+
+"#66ccff",
+
+6
+
+);
+
+}
+
+}// =====================
+// 특수공격 7
+// 꽃탄
+// =====================
+
+let flowerRotation=0;
+
+function special7(){
+
+for(
+let a=0;
+a<
+Math.PI*2;
+a+=
+Math.PI/18
+){
+
+createBullet(
+
+WIDTH/2,
+HEIGHT/2,
+
+Math.cos(
+a+flowerRotation
+)*6,
+
+Math.sin(
+a+flowerRotation
+)*6,
+
+10,
+
+"pink",
+
+9
+
+);
+
+}
+
+flowerRotation+=0.4;
+
+}
+
+// =====================
+// 특수공격 8
+// 추적 폭격
+// =====================
+
+function special8(){
+
+for(
+let i=0;
+i<25;
+i++
+){
+
+const sx=
+Math.random()
+*WIDTH;
+
+const sy=
+-20;
+
+const angle=
+Math.atan2(
+
+player.y-sy,
+
+player.x-sx
+
+);
+
+createBullet(
+
+sx,
+sy,
+
+Math.cos(angle)
+*7,
+
+Math.sin(angle)
+*7,
+
+12,
+
+"orange",
+
+10
+
+);
+
+}
+
+}// =====================
+// 특수공격 9
+// 소용돌이
+// =====================
+
+function special9(){
+
+for(
+let a=0;
+a<
+Math.PI*2;
+a+=
+Math.PI/30
+){
+
+createBullet(
+
+WIDTH/2+
+Math.cos(a)*250,
+
+HEIGHT/2+
+Math.sin(a)*250,
+
+-Math.sin(a)*6,
+
+Math.cos(a)*6,
+
+8,
+
+"#00ff88",
+
+8
+
+);
+
+}
+
+}
+
+// =====================
+// 특수공격 10
+// 파동탄
+// =====================
+
+function special10(){
+
+for(
+let wave=1;
+wave<=4;
+wave++
+){
+
+setTimeout(()=>{
+
+for(
+let a=0;
+a<
+Math.PI*2;
+a+=
+Math.PI/25
+){
+
+createBullet(
+
+WIDTH/2,
+HEIGHT/2,
+
+Math.cos(a)
+*(wave*3),
+
+Math.sin(a)
+*(wave*3),
+
+9,
+
+"white",
+
+10
+
+);
+
+}
+
+},wave*300);
+
+}
+
+}// =====================
+// 랜덤 특수공격
+// =====================
+
+function randomSpecial(){
+
+const id=
+
+Math.floor(
+Math.random()*10
+)+1;
+
+switch(id){
+
+case 1: special1(); break;
+case 2: special2(); break;
+case 3: special3(); break;
+case 4: special4(); break;
+case 5: special5(); break;
+case 6: special6(); break;
+case 7: special7(); break;
+case 8: special8(); break;
+case 9: special9(); break;
+case 10: special10(); break;
+
+}
+
+}
+
+setInterval(()=>{
+
+if(
+gameOver
+||
+cardMenu
+||
+!gameStarted
+)
+return;
+
+randomSpecial();
+
+},7000);// =====================
+// 카드 목록
+// =====================
+
+const cards=[
+
+{
+name:"HP 20% 회복",
+rarity:"green",
+used:false,
+effect:()=>{
+hp=Math.min(
+maxHp,
+hp+maxHp*0.2
+);
+}
+},
+
+{
+name:"피해량 5% 감소",
+rarity:"green",
+used:false,
+effect:()=>{
+damageMultiplier*=0.95;
+}
+},
+
+{
+name:"공격속도 5% 감소",
+rarity:"green",
+used:false,
+effect:()=>{
+enemySpeedMultiplier*=0.95;
+}
+},
+
+{
+name:"지속회복 0.01%",
+rarity:"green",
+used:false,
+effect:()=>{
+passiveHealGreen=true;
+}
+},
+
+{
+name:"HP 40% 회복",
+rarity:"blue",
+used:false,
+effect:()=>{
+hp=Math.min(
+maxHp,
+hp+maxHp*0.4
+);
+}
+},
+
+{
+name:"보호막",
+rarity:"blue",
+used:false,
+effect:()=>{
+shieldUnlocked=true;
+}
+},
+
+{
+name:"HP 80% 회복",
+rarity:"purple",
+used:false,
+effect:()=>{
+hp=Math.min(
+maxHp,
+hp+maxHp*0.8
+);
+}
+},
+
+{
+name:"부활",
+rarity:"purple",
+used:false,
+effect:()=>{
+reviveUnlocked=true;
+}
+},
+
+{
+name:"지속회복 0.07%",
+rarity:"purple",
+used:false,
+effect:()=>{
+passiveHealPurple=true;
+}
+},
+
+{
+name:"공격속도 10% 증가",
+rarity:"penalty",
+used:false,
+effect:()=>{
+enemySpeedMultiplier*=1.1;
 }
 }
 
-function openCard(){
-cardState=true;
-cardTime=0;
+];// =====================
+// 카드 등급 확률
+// =====================
 
-createCards();
+function randomRarity(){
 
-let ui=document.getElementById("card-ui");
-ui.style.display="flex";
-ui.innerHTML="";
+const r=
+Math.random()*100;
 
-hand.forEach(c=>{
-let d=document.createElement("div");
-d.className="card";
-d.style.background=c.c;
+if(r<70)
+return "green";
 
-d.innerHTML=`
-<div>${c.t}</div>
-<div style="font-size:12px">${c.d}</div>
-`;
+if(r<92)
+return "blue";
 
-d.onclick=()=>{
-applyCard(c);
-closeCard();
-};
+if(r<99)
+return "purple";
 
-ui.appendChild(d);
+return "penalty";
+
+}// =====================
+// 카드 생성
+// =====================
+
+function generateCards(){
+
+currentCards=[];
+
+const available=
+
+cards.filter(
+c=>!c.used
+);
+
+// 패널티 1%
+
+const penalties=
+
+available.filter(
+c=>c.rarity==="penalty"
+);
+
+if(
+
+penalties.length>0
+&&
+Math.random()<0.01
+
+){
+
+currentCards.push(
+
+penalties[
+Math.floor(
+Math.random()*
+penalties.length
+)
+]
+
+);
+
+return;
+
+}
+
+while(
+currentCards.length<3
+){
+
+const rarity=
+randomRarity();
+
+const pool=
+
+available.filter(
+c=>
+c.rarity===rarity
+);
+
+if(
+pool.length===0
+)
+continue;
+
+const card=
+
+pool[
+Math.floor(
+Math.random()*
+pool.length
+)
+];
+
+if(
+!currentCards.includes(card)
+){
+
+currentCards.push(card);
+
+}
+
+}
+
+}// =====================
+// 카드 선택
+// =====================
+
+function chooseCard(
+index
+){
+
+if(
+index<0
+||
+index>=currentCards.length
+)
+return;
+
+const card=
+currentCards[index];
+
+card.used=true;
+
+card.effect();
+
+cardMenu=false;
+
+}// =====================
+// 카드창 열기
+// =====================
+
+function openCardMenu(){
+
+cardMenu=true;
+
+cardCountdown=10;
+
+generateCards();
+
+}
+
+setInterval(()=>{
+
+if(
+gameOver
+||
+cardMenu
+||
+!gameStarted
+)
+return;
+
+openCardMenu();
+
+},20000);// =====================
+// 자동 선택
+// =====================
+
+setInterval(()=>{
+
+if(
+!cardMenu
+)
+return;
+
+cardCountdown--;
+
+if(
+cardCountdown<=0
+){
+
+chooseCard(
+
+Math.floor(
+Math.random()*
+currentCards.length
+)
+
+);
+
+}
+
+},1000);// =====================
+// 카드 UI
+// =====================
+
+function drawCardMenu(){
+
+if(
+!cardMenu
+)
+return;
+
+ctx.fillStyle=
+"rgba(0,0,0,0.85)";
+
+ctx.fillRect(
+0,
+0,
+WIDTH,
+HEIGHT
+);
+
+ctx.fillStyle=
+"white";
+
+ctx.font=
+"42px Arial";
+
+ctx.fillText(
+"카드 선택",
+WIDTH/2-100,
+100
+);
+
+ctx.fillText(
+cardCountdown,
+WIDTH/2,
+160
+);
+
+for(
+let i=0;
+i<currentCards.length;
+i++
+){
+
+const card=
+currentCards[i];
+
+let color=
+"green";
+
+if(
+card.rarity==="blue"
+)
+color=
+"dodgerblue";
+
+if(
+card.rarity==="purple"
+)
+color=
+"purple";
+
+if(
+card.rarity==="penalty"
+)
+color=
+"red";
+
+const x=
+150+
+i*300;
+
+ctx.fillStyle=
+color;
+
+ctx.fillRect(
+x,
+250,
+220,
+200
+);
+
+ctx.fillStyle=
+"white";
+
+ctx.font=
+"20px Arial";
+
+ctx.fillText(
+card.name,
+x+15,
+350
+);
+
+}
+
+  }// =====================
+// 카드 클릭
+// =====================
+
+canvas.addEventListener(
+"click",
+e=>{
+
+if(
+!cardMenu
+)
+return;
+
+const rect=
+canvas.getBoundingClientRect();
+
+const mx=
+e.clientX-
+rect.left;
+
+const my=
+e.clientY-
+rect.top;
+
+for(
+let i=0;
+i<currentCards.length;
+i++
+){
+
+const x=
+150+
+i*300;
+
+if(
+
+mx>x
+&&
+mx<x+220
+
+&&
+
+my>250
+&&
+my<450
+
+){
+
+chooseCard(i);
+
+}
+
+}
+
+});// =====================
+// 힐 십자가
+// =====================
+
+function spawnHealCross(){
+
+healCrosses.push({
+
+x:
+arena.x+
+50+
+Math.random()*
+(arena.w-100),
+
+y:
+arena.y+
+50+
+Math.random()*
+(arena.h-100),
+
+r:18,
+
+life:10000
+
 });
+
 }
 
-function closeCard(){
-cardState=false;
-document.getElementById("card-ui").style.display="none";
+setInterval(()=>{
+
+if(
+gameOver
+||
+!gameStarted
+||
+!healCrossUnlocked
+)
+return;
+
+spawnHealCross();
+
+},10000);// =====================
+// 힐 십자가 업데이트
+// =====================
+
+function updateHealCrosses(){
+
+for(
+let i=
+healCrosses.length-1;
+i>=0;
+i--
+){
+
+const h=
+healCrosses[i];
+
+h.life-=16;
+
+if(
+circleCollision(
+player,
+h
+)
+){
+
+hp=
+Math.min(
+maxHp,
+hp+
+maxHp*0.1
+);
+
+healCrosses.splice(
+i,
+1
+);
+
+continue;
+
 }
 
-// ================= APPLY =================
-function applyCard(c){
-switch(c.t){
-case "HP":player.hp+=40;break;
-case "HP2":player.hp+=80;break;
-case "HP3":player.hp+=160;break;
-case "SHIELD":player.inv=120;break;
-case "FAST":player.speed=1.2;break;
-case "SLOW":timeSlow=true;break;
-}
+if(
+h.life<=0
+){
+
+healCrosses.splice(
+i,
+1
+);
+
 }
 
-// ================= LOOP =================
+}
+
+  }// =====================
+// 힐 십자가 그리기
+// =====================
+
+function drawHealCrosses(){
+
+for(
+const h
+of healCrosses
+){
+
+ctx.fillStyle=
+"#66ff66";
+
+ctx.fillRect(
+h.x-4,
+h.y-15,
+8,
+30
+);
+
+ctx.fillRect(
+h.x-15,
+h.y-4,
+30,
+8
+);
+
+}
+
+}// =====================
+// 지속 회복
+// =====================
+
+setInterval(()=>{
+
+if(
+gameOver
+||
+!gameStarted
+)
+return;
+
+const elapsed=
+
+Date.now()
+-
+lastHitTime;
+
+if(
+elapsed<1000
+)
+return;
+
+if(
+passiveHealGreen
+){
+
+hp=
+Math.min(
+maxHp,
+hp+
+maxHp*0.0001
+);
+
+}
+
+if(
+passiveHealBlue
+){
+
+hp=
+Math.min(
+maxHp,
+hp+
+maxHp*0.0003
+);
+
+}
+
+if(
+passiveHealPurple
+){
+
+hp=
+Math.min(
+maxHp,
+hp+
+maxHp*0.0007
+);
+
+}
+
+},100);// =====================
+// 슬로우 필드
+// =====================
+
+setInterval(()=>{
+
+if(
+!slowFieldUnlocked
+||
+gameOver
+)
+return;
+
+slowFieldActive=true;
+
+setTimeout(()=>{
+
+slowFieldActive=false;
+
+},5000);
+
+},40000);
+
+function drawSlowField(){
+
+if(
+!slowFieldActive
+)
+return;
+
+ctx.beginPath();
+
+ctx.arc(
+
+player.x,
+player.y,
+
+80,
+
+0,
+Math.PI*2
+
+);
+
+ctx.fillStyle=
+"rgba(0,255,255,0.15)";
+
+ctx.fill();
+
+}// =====================
+// 슬로우 필드 효과
+// =====================
+
+function applySlowField(){
+
+if(
+!slowFieldActive
+)
+return;
+
+for(
+const b
+of bullets
+){
+
+const dx=
+b.x-player.x;
+
+const dy=
+b.y-player.y;
+
+const dist=
+Math.sqrt(
+dx*dx+
+dy*dy
+);
+
+if(
+dist<80
+){
+
+b.x-=
+b.vx*0.2;
+
+b.y-=
+b.vy*0.2;
+
+}
+
+}
+
+}// =====================
+// 추가 카드
+// =====================
+
+cards.push({
+
+name:"힐 십자가",
+
+rarity:"blue",
+
+used:false,
+
+effect:()=>{
+
+healCrossUnlocked=true;
+
+}
+
+});
+
+cards.push({
+
+name:"지속회복 0.03%",
+
+rarity:"blue",
+
+used:false,
+
+effect:()=>{
+
+passiveHealBlue=true;
+
+}
+
+});
+
+cards.push({
+
+name:"슬로우 필드",
+
+rarity:"green",
+
+used:false,
+
+effect:()=>{
+
+slowFieldUnlocked=true;
+
+}
+
+});
+
+cards.push({
+
+name:"맵 2% 증가",
+
+rarity:"green",
+
+used:false,
+
+effect:()=>{
+
+arena.w*=1.02;
+arena.h*=1.02;
+
+}
+
+});
+
+cards.push({
+
+name:"맵 5% 증가",
+
+rarity:"blue",
+
+used:false,
+
+effect:()=>{
+
+arena.w*=1.05;
+arena.h*=1.05;
+
+}
+
+});
+
+cards.push({
+
+name:"피해량 30% 감소",
+
+rarity:"purple",
+
+used:false,
+
+effect:()=>{
+
+damageMultiplier*=0.7;
+
+}
+
+});// =====================
+// 패널티 카드
+// =====================
+
+cards.push({
+
+name:"맵 10% 감소",
+
+rarity:"penalty",
+
+used:false,
+
+effect:()=>{
+
+arena.w*=0.9;
+arena.h*=0.9;
+
+}
+
+});
+
+cards.push({
+
+name:"30초마다 HP 감소",
+
+rarity:"penalty",
+
+used:false,
+
+effect:()=>{
+
+setInterval(()=>{
+
+if(gameOver)
+return;
+
+hp-=
+maxHp*0.05;
+
+},30000);
+
+}
+
+});// =====================
+// 카드 전부 획득
+// =====================
+
+function checkAllCardsUsed(){
+
+const remain=
+
+cards.filter(
+c=>
+!c.used
+&&
+c.rarity!=="penalty"
+);
+
+if(
+remain.length!==0
+)
+return;
+
+hp=
+Math.min(
+
+maxHp,
+
+hp+
+maxHp*0.3
+
+);
+
+for(
+const c
+of cards
+){
+
+if(
+c.rarity!=="penalty"
+)
+c.used=false;
+
+}
+
+}
+
+setInterval(
+checkAllCardsUsed,
+1000
+);// =====================
+// 스킬 업데이트
+// =====================
+
+function updateSkills(){
+
+applySlowField();
+
+handleRevive();
+
+}// =====================
+// 게임 오브젝트 그리기
+// =====================
+
+function drawGameObjects(){
+
+drawArena();
+
+drawBullets();
+
+drawHealCrosses();
+
+drawPlayer();
+
+drawShield();
+
+drawHpBar();
+
+drawTime();
+
+}// =====================
+// 업데이트
+// =====================
+
 function update(){
 
-runTime+=1/60;
-spawn++;
-
-// 카드 이벤트
-if(!cardState){
-cardTime+=1/60;
-if(cardTime>20){
-cardTime=0;
-openCard();
-}
-}
-
-// 정지
-if(cardState){
-document.getElementById("bar").style.width =
-((cardMax-cardTime)/cardMax*100)+"%";
+if(
+gameOver
+)
 return;
+
+if(
+!cardMenu
+){
+
+updatePlayer();
+
+updateBullets();
+
+updateHealCrosses();
+
+updateSkills();
+
 }
 
-// 탄막
-if(spawn%25===0) spawnBullet();
+frame++;
 
-// 이동 제한
-clamp();
+}// =====================
+// 렌더링
+// =====================
 
-// 충돌
-for(let b of bullets){
-b.x+=b.vx;
-b.y+=b.vy;
+function render(){
 
-if(Math.hypot(b.x-player.x,b.y-player.y)<10){
-player.hp-=10;
-}
-}
+ctx.clearRect(
+0,
+0,
+WIDTH,
+HEIGHT
+);
 
-bullets=bullets.filter(b=>b.x>-100&&b.x<c.width+100);
-}
+drawGameObjects();
 
-// ================= DRAW =================
-function draw(){
+drawSlowField();
 
-ctx.clearRect(0,0,c.width,c.height);
+drawCardMenu();
 
-// ARENA
-ctx.strokeStyle="#00f0ff";
-ctx.lineWidth=3;
-ctx.strokeRect(ARENA.x,ARENA.y,ARENA.size,ARENA.size);
+}// =====================
+// GAME OVER
+// =====================
 
-// PLAYER
-ctx.fillStyle="white";
-ctx.beginPath();
-ctx.arc(player.x,player.y,10,0,Math.PI*2);
-ctx.fill();
+function drawGameOver(){
 
-// BULLETS
-ctx.fillStyle="red";
-for(let b of bullets){
-ctx.beginPath();
-ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
-ctx.fill();
-}
-}
+if(
+!gameOver
+)
+return;
 
-// ================= LOOP =================
-function loop(){
+ctx.fillStyle=
+"rgba(0,0,0,0.8)";
+
+ctx.fillRect(
+0,
+0,
+WIDTH,
+HEIGHT
+);
+
+ctx.fillStyle=
+"red";
+
+ctx.font=
+"80px Arial";
+
+ctx.textAlign=
+"center";
+
+ctx.fillText(
+
+"GAME OVER",
+
+WIDTH/2,
+
+HEIGHT/2
+
+);
+
+ctx.fillStyle=
+"white";
+
+ctx.font=
+"32px Arial";
+
+ctx.fillText(
+
+"생존 시간 : "
++
+surviveTime
++
+"초",
+
+WIDTH/2,
+
+HEIGHT/2+80
+
+);
+
+}// =====================
+// 메인 루프
+// =====================
+
+function gameLoop(){
+
 update();
-draw();
 
-document.getElementById("t").innerText=runTime.toFixed(1);
+render();
 
-requestAnimationFrame(loop);
+drawGameOver();
+
+requestAnimationFrame(
+gameLoop
+);
+
+}// =====================
+// 시작 카운트다운
+// =====================
+
+let startCountdown=3;
+
+function drawCountdown(){
+
+ctx.clearRect(
+0,
+0,
+WIDTH,
+HEIGHT
+);
+
+drawArena();
+
+drawPlayer();
+
+ctx.fillStyle=
+"white";
+
+ctx.font=
+"100px Arial";
+
+ctx.textAlign=
+"center";
+
+ctx.fillText(
+
+startCountdown,
+
+WIDTH/2,
+
+HEIGHT/2
+
+);
+
+  }// =====================
+// 카운트다운 시작
+// =====================
+
+const countdownLoop=
+
+setInterval(()=>{
+
+startCountdown--;
+
+if(
+startCountdown<=0
+){
+
+clearInterval(
+countdownLoop
+);
+
+gameStarted=true;
+
+gameLoop();
+
 }
-loop();
 
-</script>
+},1000);// =====================
+// 대기 루프
+// =====================
 
+function waitingLoop(){
+
+if(
+gameStarted
+)
+return;
+
+drawCountdown();
+
+requestAnimationFrame(
+waitingLoop
+);
+
+}
+
+waitingLoop();</script>
 </body>
 </html>
