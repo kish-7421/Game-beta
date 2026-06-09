@@ -3,18 +3,9 @@
 <head>
 
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 
-<meta
-name="viewport"
-content="
-width=device-width,
-initial-scale=1,
-user-scalable=no
-">
-
-<title>
-Ultimate Survival Mobile
-</title>
+<title>Survival Game</title>
 
 <style>
 
@@ -24,28 +15,18 @@ padding:0;
 box-sizing:border-box;
 }
 
-html,
-body{
-
+html,body{
 width:100%;
 height:100%;
-
 overflow:hidden;
-
 background:black;
-
 touch-action:none;
-
 }
 
 canvas{
-
 display:block;
-
 margin:auto;
-
 background:black;
-
 }
 
 </style>
@@ -59,3087 +40,1671 @@ background:black;
 <script>
 
 // =====================
-// 캔버스
+// Canvas
 // =====================
 
 const canvas =
-document.getElementById(
-"game"
-);
+document.getElementById("game");
 
 const ctx =
-canvas.getContext(
-"2d"
-);
+canvas.getContext("2d");
 
 canvas.width = 450;
 canvas.height = 900;
 
-const WIDTH =
-canvas.width;
+const WIDTH = canvas.width;
+const HEIGHT = canvas.height;
 
-const HEIGHT =
-canvas.height;// =====================
-// 게임 상태
+// =====================
+// Time System
 // =====================
 
-let gameStarted = false;
+let lastTime = 0;
+let deltaTime = 0;
 
-let gameOver = false;
-
-let frame = 0;
-
-let surviveTime = 0;
-
-let countdown = 3;
-
-let gamePaused = false;
-
-// 카드창 열리면 true// =====================
-// 경기장
+// =====================
+// Game State (CORE)
 // =====================
 
-const arena = {
+const game = {
 
-centerX:
-WIDTH / 2,
+started:false,
+gameOver:false,
+paused:false,
 
-centerY:
-HEIGHT / 2,
-
-w:300,
-
-h:820
+countdown:3,
+countdownTimer:0
 
 };
 
-function getArenaX(){
-
-return (
-arena.centerX
--
-arena.w/2
-);
-
-}
-
-function getArenaY(){
-
-return (
-arena.centerY
--
-arena.h/2
-);
-
-}// =====================
-// 플레이어
+// =====================
+// Player (CORE)
 // =====================
 
 const player = {
 
 x: WIDTH/2,
-
 y: HEIGHT/2,
 
-baseRadius:12,
+r: 12,
+speed: 260
 
-r:12,
+};
 
-speed:5
-
-};// =====================
-// 능력치
+// =====================
+// Arena (CORE)
 // =====================
 
-const stats = {
+const arena = {
 
-maxHp:100,
+x: WIDTH/2,
+y: HEIGHT/2,
 
-hp:100,
+w: 300,
+h: 820
 
-damageReduction:0,
+};
 
-enemySpeedMultiplier:1,
-
-dodgeChance:0,
-
-revive:false,
-
-reviveUsed:false,
-
-shieldUnlocked:false,
-
-shieldActive:false,
-
-healCrossUnlocked:false,
-
-slowFieldUnlocked:false,
-
-slowFieldActive:false,
-
-periodicHeal:false,
-
-periodicDamage:false,
-
-passiveHeal:0,
-
-smallMode:false,
-
-smallModeActive:false,
-
-lowHpSlow:false,
-
-lowHpSlowUsed:false
-
-};// =====================
-// 오브젝트
-// =====================
-
-const bullets = [];
-
-const healCrosses = [];
-
-const allCards = [];
-
-let currentCards = [];// =====================
-// 카드 상태
-// =====================
-
-let cardMenu = false;
-
-let cardCountdown = 0;// =====================
-// 타이머
-// =====================
-
-let normalAttackTimer = 0;
-
-let specialAttackTimer = 0;
-
-let cardTimer = 0;
-
-let healCrossTimer = 0;
-
-let shieldTimer = 0;
-
-let slowFieldTimer = 0;// =====================
-// 모바일 터치
-// =====================
-
-let touchActive = false;
-
-let touchX = 0;
-
-let touchY = 0;// =====================
-// 유틸
-// =====================
-
-function distance(
-x1,
-y1,
-x2,
-y2
-){
-
-const dx =
-x1 - x2;
-
-const dy =
-y1 - y2;
-
-return Math.sqrt(
-dx*dx +
-dy*dy
-);
-
+function getArenaX(){
+return arena.x - arena.w/2;
 }
 
-function circleCollision(
-a,
-b
-){
-
-return distance(
-
-a.x,
-a.y,
-
-b.x,
-b.y
-
-)
-
-<
-
-a.r + b.r;
-
-}// =====================
-// 탄 제한
-// =====================
-
-function createBullet(
-x,
-y,
-vx,
-vy,
-r,
-color,
-damage
-){
-
-if(
-bullets.length >= 500
-){
-
-bullets.shift();
-
+function getArenaY(){
+return arena.y - arena.h/2;
 }
 
-bullets.push({
-
-x,
-y,
-
-vx,
-vy,
-
-r,
-
-color,
-
-damage
-
-});
-
-}// =====================
-// 사망 체크
+// =====================
+// DATA CONTAINERS (EMPTY CORE)
 // =====================
 
-function checkDeath(){
+const entities = [];
+const projectiles = [];
+const effects = [];
+const ui = [];
 
-if(
-stats.hp>0
-)
-return;
-
-if(
-revivePlayer()
-)
-return;
-
-gameOver=true;
-
-}// =====================
-// 피해 처리
+// =====================
+// INPUT CORE (EMPTY FOR NOW)
 // =====================
 
-function damagePlayer(
-amount
-){
+const input = {
 
-if(
-stats.shieldActive
-)
-return;
+dx:0,
+dy:0,
+active:false
 
-if(
-Math.random()
-<
-stats.dodgeChance
-)
-return;
+};
 
-const finalDamage=
-
-amount*
-(
-1-
-stats.damageReduction
-);
-
-stats.hp-=finalDamage;
-
-if(
-stats.hp<0
-)
-stats.hp=0;
-
-}// =====================
-// 부활
+// =====================
+// CORE SYSTEM FUNCTIONS (DO NOT TOUCH)
 // =====================
 
-function revivePlayer(){
+function updateInput(){}
+function updatePlayer(){}
+function updateEntities(){}
+function updateProjectiles(){}
+function updateEffects(){}
+function updateGameRules(){}
 
-if(
-!stats.revive
-)
-return false;
-
-if(
-stats.reviveUsed
-)
-return false;
-
-stats.reviveUsed=true;
-
-stats.hp=
-stats.maxHp*0.3;
-
-// 부활 시 탄 전부 제거
-bullets.length=0;
-
-stats.shieldActive=true;
-
-setTimeout(()=>{
-
-stats.shieldActive=false;
-
-},2000);
-
-return true;
-
-}// =====================
-// 사망 체크
 // =====================
-
-function checkDeath(){
-
-if(
-stats.hp>0
-)
-return;
-
-if(
-revivePlayer()
-)
-return;
-
-gameOver=true;
-
-}// =====================
-// 터치 시작
-// =====================
-
-canvas.addEventListener(
-"touchstart",
-e=>{
-
-const rect=
-canvas.getBoundingClientRect();
-
-touchX=
-e.touches[0].clientX
--
-rect.left;
-
-touchY=
-e.touches[0].clientY
--
-rect.top;
-
-touchActive=true;
-
-e.preventDefault();
-
-},
-{
-passive:false
-}
-);// =====================
-// 터치 이동
-// =====================
-
-canvas.addEventListener(
-"touchmove",
-e=>{
-
-const rect=
-canvas.getBoundingClientRect();
-
-touchX=
-e.touches[0].clientX
--
-rect.left;
-
-touchY=
-e.touches[0].clientY
--
-rect.top;
-
-e.preventDefault();
-
-},
-{
-passive:false
-}
-);// =====================
-// 터치 종료
-// =====================
-
-canvas.addEventListener(
-"touchend",
-()=>{
-
-touchActive=false;
-
-}
-);// =====================
-// 플레이어 이동
-// =====================
-
-function updatePlayer(){
-
-if(
-!touchActive
-)
-return;
-
-const dx=
-touchX-player.x;
-
-const dy=
-touchY-player.y;
-
-const dist=
-Math.sqrt(
-dx*dx+
-dy*dy
-);
-
-if(
-dist<2
-)
-return;
-
-player.x+=
-
-(dx/dist)
-*
-player.speed;
-
-player.y+=
-
-(dy/dist)
-*
-player.speed;
-
-}// =====================
-// 벽 충돌
-// =====================
-
-function updateArenaCollision(){
-
-const ax=
-getArenaX();
-
-const ay=
-getArenaY();
-
-if(
-player.x-player.r
-<
-ax
-){
-
-player.x=
-ax+
-player.r;
-
-damagePlayer(
-0.03
-);
-
-}
-
-if(
-player.x+player.r
->
-ax+
-arena.w
-){
-
-player.x=
-ax+
-arena.w-
-player.r;
-
-damagePlayer(
-0.03
-);
-
-}
-
-if(
-player.y-player.r
-<
-ay
-){
-
-player.y=
-ay+
-player.r;
-
-damagePlayer(
-0.03
-);
-
-}
-
-if(
-player.y+player.r
->
-ay+
-arena.h
-){
-
-player.y=
-ay+
-arena.h-
-player.r;
-
-damagePlayer(
-0.03
-);
-
-}
-
-}// =====================
-// 경기장
+// DRAW CORE
 // =====================
 
 function drawArena(){
 
-ctx.strokeStyle=
-"#3399ff";
-
-ctx.lineWidth=5;
+ctx.strokeStyle = "#3399ff";
+ctx.lineWidth = 5;
 
 ctx.strokeRect(
-
 getArenaX(),
 getArenaY(),
-
 arena.w,
 arena.h
-
 );
 
-}// =====================
-// 플레이어
-// =====================
+}
 
 function drawPlayer(){
 
 ctx.beginPath();
-
-ctx.arc(
-
-player.x,
-player.y,
-
-player.r,
-
-0,
-Math.PI*2
-
-);
-
-ctx.fillStyle=
-"white";
-
+ctx.arc(player.x, player.y, player.r, 0, Math.PI*2);
+ctx.fillStyle = "white";
 ctx.fill();
 
-}// =====================
-// HP 바
+}
+
+function drawEntities(){}
+function drawProjectiles(){}
+function drawEffects(){}
+function drawUI(){}
+
+// =====================
+// COUNTDOWN CORE
 // =====================
 
-function drawHpBar(){
+function updateCountdown(){
 
-ctx.fillStyle=
-"#222";
+if(game.started) return;
 
-ctx.fillRect(
-20,
-15,
-220,
-22
-);
+game.countdownTimer += deltaTime;
 
-ctx.fillStyle=
-"lime";
+if(game.countdownTimer >= 1){
 
-ctx.fillRect(
+game.countdownTimer = 0;
+game.countdown--;
 
-20,
-15,
+if(game.countdown <= 0){
+game.started = true;
+}
 
-220*
-(
-stats.hp/
-stats.maxHp
-),
+}
 
-22
-
-);
-
-ctx.strokeStyle=
-"white";
-
-ctx.strokeRect(
-20,
-15,
-220,
-22
-);
-
-ctx.fillStyle=
-"white";
-
-ctx.font=
-"18px Arial";
-
-ctx.fillText(
-
-Math.floor(
-stats.hp
-)
-+
-"/"
-+
-stats.maxHp,
-
-25,
-55
-
-);
-
-}// =====================
-// 생존 시간
-// =====================
-
-function drawTime(){
-
-ctx.fillStyle=
-"white";
-
-ctx.font=
-"24px Arial";
-
-ctx.textAlign=
-"left";
-
-ctx.fillText(
-
-surviveTime
-+
-"s",
-
-350,
-35
-
-);
-
-}// =====================
-// 카운트다운
-// =====================
+}
 
 function drawCountdown(){
 
-ctx.clearRect(
-0,
-0,
-WIDTH,
-HEIGHT
-);
+if(game.started) return;
 
-drawArena();
-
-drawPlayer();
-
-ctx.fillStyle=
-"white";
-
-ctx.font=
-"100px Arial";
-
-ctx.textAlign=
-"center";
+ctx.fillStyle = "white";
+ctx.font = "80px Arial";
+ctx.textAlign = "center";
 
 ctx.fillText(
-
-countdown,
-
+game.countdown,
 WIDTH/2,
-
 HEIGHT/2
-
 );
 
-}// =====================
-// 카운트다운 시작
+}
+
 // =====================
-
-function startCountdown(){
-
-const timer=
-
-setInterval(()=>{
-
-countdown--;
-
-if(
-countdown<=0
-){
-
-clearInterval(
-timer
-);
-
-gameStarted=true;
-
-}
-
-},1000);
-
-}// =====================
-// 생존 시간
-// =====================
-
-setInterval(()=>{
-
-if(
-!gameStarted
-)
-return;
-
-if(
-gameOver
-)
-return;
-
-if(
-gamePaused
-)
-return;
-
-surviveTime++;
-
-},1000);// =====================
-// 탄 업데이트
-// =====================
-
-function updateBullets(){
-
-for(
-let i=
-bullets.length-1;
-i>=0;
-i--
-){
-
-const b=
-bullets[i];
-
-b.x+=
-b.vx*
-stats.enemySpeedMultiplier;
-
-b.y+=
-b.vy*
-stats.enemySpeedMultiplier;
-
-if(
-circleCollision(
-player,
-b
-)
-){
-
-damagePlayer(
-b.damage
-);
-
-bullets.splice(
-i,
-1
-);
-
-continue;
-
-}
-
-if(
-
-b.x<-100
-||
-b.x>WIDTH+100
-||
-b.y<-100
-||
-b.y>HEIGHT+100
-
-){
-
-bullets.splice(
-i,
-1
-);
-
-}
-
-}
-
-}// =====================
-// 탄 그리기
-// =====================
-
-function drawBullets(){
-
-for(
-const b
-of bullets
-){
-
-ctx.beginPath();
-
-ctx.arc(
-
-b.x,
-b.y,
-
-b.r,
-
-0,
-Math.PI*2
-
-);
-
-ctx.fillStyle=
-b.color;
-
-ctx.fill();
-
-}
-
-}// =====================
-// 플레이어 조준
-// =====================
-
-function shootAtPlayer(
-x,
-y,
-speed,
-size,
-color,
-damage
-){
-
-const angle=
-Math.atan2(
-
-player.y-y,
-
-player.x-x
-
-);
-
-createBullet(
-
-x,
-y,
-
-Math.cos(angle)
-*
-speed,
-
-Math.sin(angle)
-*
-speed,
-
-size,
-
-color,
-
-damage
-
-);
-
-}function pattern1(){
-
-shootAtPlayer(
-getArenaX()-20,
-getArenaY()+
-Math.random()*arena.h,
-6,
-7,
-"red",
-5
-);
-
-}
-
-function pattern2(){
-
-shootAtPlayer(
-getArenaX()+
-arena.w+
-20,
-getArenaY()+
-Math.random()*arena.h,
-6,
-7,
-"red",
-5
-);
-
-}
-
-function pattern3(){
-
-shootAtPlayer(
-getArenaX()+
-Math.random()*arena.w,
-getArenaY()-20,
-6,
-7,
-"orange",
-5
-);
-
-}
-
-function pattern4(){
-
-shootAtPlayer(
-getArenaX()+
-Math.random()*arena.w,
-getArenaY()+
-arena.h+
-20,
-6,
-7,
-"orange",
-5
-);
-
-}
-
-function pattern5(){
-
-for(
-let i=-2;
-i<=2;
-i++
-){
-
-createBullet(
-
-getArenaX()-20,
-
-player.y,
-
-6,
-
-i*1.2,
-
-6,
-
-"yellow",
-
-4
-
-);
-
-}
-
-  }function pattern6(){
-
-for(
-let x=
-getArenaX();
-x<
-getArenaX()+arena.w;
-x+=35
-){
-
-createBullet(
-x,
-getArenaY()-20,
-0,
-5,
-6,
-"lime",
-4
-);
-
-}
-
-}
-
-function pattern7(){
-
-for(
-let y=
-getArenaY();
-y<
-getArenaY()+arena.h;
-y+=35
-){
-
-createBullet(
-getArenaX()-20,
-y,
-5,
-0,
-6,
-"lime",
-4
-);
-
-}
-
-}
-
-function pattern8(){
-
-createBullet(
-
-getArenaX()-30,
-
-getArenaY()+
-Math.random()*arena.h,
-
-3,
-
-0,
-
-18,
-
-"purple",
-
-10
-
-);
-
-}
-
-function pattern9(){
-
-createBullet(
-
-getArenaX()-20,
-
-getArenaY()+
-Math.random()*arena.h,
-
-12,
-
-0,
-
-5,
-
-"white",
-
-5
-
-);
-
-}
-
-function pattern10(){
-
-for(
-let a=0;
-a<
-Math.PI*2;
-a+=
-Math.PI/8
-){
-
-createBullet(
-
-arena.centerX,
-arena.centerY,
-
-Math.cos(a)*4,
-
-Math.sin(a)*4,
-
-6,
-
-"cyan",
-
-5
-
-);
-
-}
-
-}function pattern11(){
-
-for(
-let i=0;
-i<20;
-i++
-){
-
-createBullet(
-
-getArenaX()+
-Math.random()*arena.w,
-
-getArenaY()-20,
-
-0,
-
-6,
-
-5,
-
-"#66ccff",
-
-4
-
-);
-
-}
-
-}
-
-function pattern12(){
-
-for(
-let i=0;
-i<8;
-i++
-){
-
-shootAtPlayer(
-
-getArenaX()-20,
-
-getArenaY()+
-i*100,
-
-5,
-
-7,
-
-"#ff8800",
-
-5
-
-);
-
-}
-
-}
-
-function pattern13(){
-
-for(
-let i=0;
-i<12;
-i++
-){
-
-const angle=
-i*
-(Math.PI*2/12);
-
-createBullet(
-
-arena.centerX,
-arena.centerY,
-
-Math.cos(angle)*5,
-
-Math.sin(angle)*5,
-
-7,
-
-"pink",
-
-5
-
-);
-
-}
-
-}
-
-function pattern14(){
-
-for(
-let i=0;
-i<30;
-i++
-){
-
-createBullet(
-
-getArenaX()+
-Math.random()*arena.w,
-
-getArenaY()-20,
-
-Math.random()*2-1,
-
-5,
-
-5,
-
-"#00ff88",
-
-4
-
-);
-
-}
-
-}
-
-function pattern15(){
-
-const corners=[
-
-[
-getArenaX()-20,
-getArenaY()-20
-],
-
-[
-getArenaX()+arena.w+20,
-getArenaY()-20
-],
-
-[
-getArenaX()-20,
-getArenaY()+arena.h+20
-],
-
-[
-getArenaX()+arena.w+20,
-getArenaY()+arena.h+20
-]
-
-];
-
-for(
-const c
-of corners
-){
-
-shootAtPlayer(
-c[0],
-c[1],
-8,
-10,
-"gold",
-8
-);
-
-}// =====================
-// 랜덤 일반 공격
-// =====================
-
-function randomPattern(){
-
-const id=
-
-Math.floor(
-Math.random()*15
-)+1;
-
-switch(id){
-
-case 1: pattern1(); break;
-case 2: pattern2(); break;
-case 3: pattern3(); break;
-case 4: pattern4(); break;
-case 5: pattern5(); break;
-case 6: pattern6(); break;
-case 7: pattern7(); break;
-case 8: pattern8(); break;
-case 9: pattern9(); break;
-case 10: pattern10(); break;
-case 11: pattern11(); break;
-case 12: pattern12(); break;
-case 13: pattern13(); break;
-case 14: pattern14(); break;
-case 15: pattern15(); break;
-
-}
-
-}// =====================
-// 일반 공격 간격
-// =====================
-
-function getNormalAttackFrames(){
-
-if(
-surviveTime>=110
-)
-return 33; // 약 0.55초
-
-if(
-surviveTime>=60
-)
-return 45; // 약 0.75초
-
-return 48; // 약 0.8초
-}// =====================
-// 일반 공격 업데이트
-// =====================
-
-function updateNormalAttacks(){
-
-normalAttackTimer++;
-
-if(
-normalAttackTimer
-<
-getNormalAttackFrames()
-)
-return;
-
-normalAttackTimer=0;
-
-randomPattern();
-
-}// =====================
-// 특수공격 1
-// 대형 원형 폭발
-// =====================
-
-function special1(){
-
-for(
-let a=0;
-a<
-Math.PI*2;
-a+=
-Math.PI/24
-){
-
-createBullet(
-
-arena.centerX,
-arena.centerY,
-
-Math.cos(a)*7,
-Math.sin(a)*7,
-
-8,
-
-"#00ffff",
-
-8
-
-);
-
-}
-
-}// =====================
-// 특수공격 2
-// 이중 폭발
-// =====================
-
-function special2(){
-
-for(
-let a=0;
-a<
-Math.PI*2;
-a+=
-Math.PI/20
-){
-
-createBullet(
-arena.centerX,
-arena.centerY,
-Math.cos(a)*4,
-Math.sin(a)*4,
-7,
-"#ff00ff",
-7
-);
-
-createBullet(
-arena.centerX,
-arena.centerY,
-Math.cos(a)*8,
-Math.sin(a)*8,
-7,
-"#ff00ff",
-7
-);
-
-}
-
-}// =====================
-// 특수공격 3
-// 외곽 수렴
-// =====================
-
-function special3(){
-
-for(
-let i=0;
-i<60;
-i++
-){
-
-const angle=
-Math.random()
-*
-Math.PI*2;
-
-const x=
-arena.centerX+
-Math.cos(angle)*350;
-
-const y=
-arena.centerY+
-Math.sin(angle)*500;
-
-createBullet(
-
-x,
-y,
-
--Math.cos(angle)*5,
--Math.sin(angle)*5,
-
-7,
-
-"purple",
-
-8
-
-);
-
-}
-
-}// =====================
-// 특수공격 4
-// 십자탄
-// =====================
-
-function special4(){
-
-for(
-let i=0;
-i<15;
-i++
-){
-
-createBullet(
-arena.centerX,
-arena.centerY,
-8,
-0,
-7,
-"red",
-8
-);
-
-createBullet(
-arena.centerX,
-arena.centerY,
--8,
-0,
-7,
-"red",
-8
-);
-
-createBullet(
-arena.centerX,
-arena.centerY,
-0,
-8,
-7,
-"red",
-8
-);
-
-createBullet(
-arena.centerX,
-arena.centerY,
-0,
--8,
-7,
-"red",
-8
-);
-
-}
-
-}// =====================
-// 특수공격 5
-// 별 패턴
-// =====================
-
-function special5(){
-
-for(
-let i=0;
-i<5;
-i++
-){
-
-const angle=
-i*
-(
-Math.PI*2/5
-);
-
-for(
-let j=0;
-j<6;
-j++
-){
-
-createBullet(
-
-arena.centerX,
-arena.centerY,
-
-Math.cos(
-angle+j*0.3
-)*7,
-
-Math.sin(
-angle+j*0.3
-)*7,
-
-7,
-
-"gold",
-
-8
-
-);
-
-}
-
-}
-
-}// =====================
-// 특수공격 6
-// 폭우
-// =====================
-
-function special6(){
-
-for(
-let i=0;
-i<80;
-i++
-){
-
-createBullet(
-
-getArenaX()+
-Math.random()*arena.w,
-
-getArenaY()-50-
-Math.random()*200,
-
-0,
-
-8,
-
-5,
-
-"#66ccff",
-
-6
-
-);
-
-}
-
-}// =====================
-// 특수공격 7
-// 꽃 패턴
-// =====================
-
-function special7(){
-
-for(
-let a=0;
-a<
-Math.PI*2;
-a+=
-Math.PI/16
-){
-
-createBullet(
-
-arena.centerX,
-arena.centerY,
-
-Math.cos(a)*6,
-Math.sin(a)*6,
-
-8,
-
-"pink",
-
-7
-
-);
-
-}
-
-}// =====================
-// 특수공격 8
-// 코너 저격
-// =====================
-
-function special8(){
-
-const corners=[
-
-[
-getArenaX()-20,
-getArenaY()-20
-],
-
-[
-getArenaX()+arena.w+20,
-getArenaY()-20
-],
-
-[
-getArenaX()-20,
-getArenaY()+arena.h+20
-],
-
-[
-getArenaX()+arena.w+20,
-getArenaY()+arena.h+20
-]
-
-];
-
-for(
-const c
-of corners
-){
-
-shootAtPlayer(
-
-c[0],
-c[1],
-
-9,
-
-10,
-
-"orange",
-
-10
-
-);
-
-}
-
-}// =====================
-// 특수공격 9
-// 소용돌이
-// =====================
-
-function special9(){
-
-for(
-let a=0;
-a<
-Math.PI*2;
-a+=
-Math.PI/18
-){
-
-createBullet(
-
-arena.centerX+
-Math.cos(a)*140,
-
-arena.centerY+
-Math.sin(a)*140,
-
--Math.sin(a)*6,
-
-Math.cos(a)*6,
-
-7,
-
-"#00ff88",
-
-7
-
-);
-
-}
-
-}// =====================
-// 특수공격 10
-// 3중 파동
-// =====================
-
-function special10(){
-
-for(
-let ring=1;
-ring<=3;
-ring++
-){
-
-for(
-let a=0;
-a<
-Math.PI*2;
-a+=
-Math.PI/18
-){
-
-createBullet(
-
-arena.centerX,
-arena.centerY,
-
-Math.cos(a)
-*
-(ring*3),
-
-Math.sin(a)
-*
-(ring*3),
-
-7,
-
-"white",
-
-8
-
-);
-
-}
-
-}
-
-}// =====================
-// 랜덤 특수공격
-// =====================
-
-function randomSpecial(){
-
-const id=
-
-Math.floor(
-Math.random()*10
-)+1;
-
-switch(id){
-
-case 1: special1(); break;
-case 2: special2(); break;
-case 3: special3(); break;
-case 4: special4(); break;
-case 5: special5(); break;
-case 6: special6(); break;
-case 7: special7(); break;
-case 8: special8(); break;
-case 9: special9(); break;
-case 10: special10(); break;
-
-}
-
-}// =====================
-// 특수공격 간격
-// =====================
-
-function getSpecialAttackFrames(){
-
-if(
-surviveTime>=110
-)
-return 480; // 8초
-
-if(
-surviveTime>=60
-)
-return 600; // 10초
-
-return 840; // 14초
-
-}// =====================
-// 특수공격 업데이트
-// =====================
-
-function updateSpecialAttacks(){
-
-specialAttackTimer++;
-
-if(
-specialAttackTimer
-<
-getSpecialAttackFrames()
-)
-return;
-
-specialAttackTimer=0;
-
-randomSpecial();
-
-}// =====================
-// 카드 등록
-// =====================
-
-allCards.push(
-
-{
-name:"HP 20% 회복",
-rarity:"green",
-used:false,
-effect(){
-stats.hp=Math.min(
-stats.maxHp,
-stats.hp+20
-);
-}
-},
-
-{
-name:"피해 5% 감소",
-rarity:"green",
-used:false,
-effect(){
-stats.damageReduction+=0.05;
-}
-},
-
-{
-name:"지속회복 0.01%",
-rarity:"green",
-used:false,
-effect(){
-stats.passiveHeal+=0.0001;
-}
-},
-
-{
-name:"공격속도 5% 감소",
-rarity:"green",
-used:false,
-effect(){
-stats.enemySpeedMultiplier*=0.95;
-}
-},
-
-{
-name:"맵 2% 증가",
-rarity:"green",
-used:false,
-effect(){
-arena.w*=1.02;
-arena.h*=1.02;
-}
-},
-
-{
-name:"30초마다 HP 5% 회복",
-rarity:"green",
-used:false,
-effect(){
-stats.periodicHeal=true;
-}
-},
-
-{
-name:"40초마다 슬로우 필드",
-rarity:"green",
-used:false,
-effect(){
-stats.slowFieldUnlocked=true;
-}
-},
-
-{
-name:"30초마다 3초 크기 감소",
-rarity:"green",
-used:false,
-effect(){
-stats.smallMode=true;
-}
-},
-
-{
-name:"HP 40% 회복",
-rarity:"blue",
-used:false,
-effect(){
-stats.hp=Math.min(
-stats.maxHp,
-stats.hp+40
-);
-}
-},
-
-{
-name:"보호막",
-rarity:"blue",
-used:false,
-effect(){
-stats.shieldUnlocked=true;
-}
-},
-
-{
-name:"지속회복 0.03%",
-rarity:"blue",
-used:false,
-effect(){
-stats.passiveHeal+=0.0003;
-}
-},
-
-{
-name:"피해 10% 감소",
-rarity:"blue",
-used:false,
-effect(){
-stats.damageReduction+=0.10;
-}
-},
-
-{
-name:"힐 십자가",
-rarity:"blue",
-used:false,
-effect(){
-stats.healCrossUnlocked=true;
-}
-},
-
-{
-name:"맵 5% 증가",
-rarity:"blue",
-used:false,
-effect(){
-arena.w*=1.05;
-arena.h*=1.05;
-}
-},
-
-{
-name:"HP 80% 회복",
-rarity:"purple",
-used:false,
-effect(){
-stats.hp=Math.min(
-stats.maxHp,
-stats.hp+80
-);
-}
-},
-
-{
-name:"부활",
-rarity:"purple",
-used:false,
-effect(){
-stats.revive=true;
-}
-},
-
-{
-name:"지속회복 0.07%",
-rarity:"purple",
-used:false,
-effect(){
-stats.passiveHeal+=0.0007;
-}
-},
-
-{
-name:"피해 30% 감소",
-rarity:"purple",
-used:false,
-effect(){
-stats.damageReduction+=0.30;
-}
-},
-
-{
-name:"HP 5% 이하 슬로우",
-rarity:"purple",
-used:false,
-effect(){
-stats.lowHpSlow=true;
-}
-},
-
-{
-name:"0.1% 회피",
-rarity:"purple",
-used:false,
-effect(){
-stats.dodgeChance+=0.001;
-}
-},
-
-{
-name:"적 속도 10% 증가",
-rarity:"penalty",
-used:false,
-effect(){
-stats.enemySpeedMultiplier*=1.1;
-}
-},
-
-{
-name:"맵 10% 감소",
-rarity:"penalty",
-used:false,
-effect(){
-arena.w*=0.9;
-arena.h*=0.9;
-}
-},
-
-{
-name:"30초마다 HP 5% 감소",
-rarity:"penalty",
-used:false,
-effect(){
-stats.periodicDamage=true;
-}
-}
-
-);// =====================
-// 카드 확률
-// =====================
-
-function getRandomRarity(){
-
-const r=
-Math.random()*100;
-
-if(r<65)
-return "green";
-
-if(r<85)
-return "blue";
-
-if(r<97)
-return "purple";
-
-return "penalty";
-
-  }// =====================
-// 카드 생성
-// =====================
-
-function generateCards(){
-
-currentCards=[];
-
-const available=
-
-allCards.filter(
-card=>!card.used
-);
-
-// 카드 전부 사용
-
-if(
-available.length===0
-){
-
-stats.hp=Math.min(
-stats.maxHp,
-stats.hp+
-stats.maxHp*0.3
-);
-
-return false;
-
-}
-
-while(
-currentCards.length<3
-){
-
-const rarity=
-getRandomRarity();
-
-const pool=
-
-available.filter(
-c=>
-c.rarity===rarity
-);
-
-if(
-pool.length===0
-)
-continue;
-
-const card=
-
-pool[
-Math.floor(
-Math.random()
-*
-pool.length
-)
-];
-
-if(
-!currentCards.includes(card)
-){
-
-currentCards.push(card);
-
-}
-
-}
-
-return true;
-
-}// =====================
-// 카드 열기
-// =====================
-
-function openCardMenu(){
-
-if(
-!generateCards()
-)
-return;
-
-cardMenu=true;
-
-gamePaused=true;
-
-cardCountdown=600;
-
-}// =====================
-// 카드 선택
-// =====================
-
-function chooseCard(
-index
-){
-
-const card=
-currentCards[index];
-
-if(
-!card
-)
-return;
-
-card.used=true;
-
-card.effect();
-
-cardMenu=false;
-
-gamePaused=false;
-
-}// =====================
-// 카드 타이머
-// =====================
-
-function updateCardTimer(){
-
-cardTimer++;
-
-if(
-cardTimer<1200
-)
-return;
-
-cardTimer=0;
-
-openCardMenu();
-
-}// =====================
-// 카드 자동선택
-// =====================
-
-function updateCardMenu(){
-
-if(
-!cardMenu
-)
-return;
-
-cardCountdown--;
-
-if(
-cardCountdown>0
-)
-return;
-
-chooseCard(
-
-Math.floor(
-Math.random()
-*
-currentCards.length
-)
-
-);
-
-}// =====================
-// 모바일 카드 선택
-// =====================
-
-canvas.addEventListener(
-"touchstart",
-e=>{
-
-if(
-!cardMenu
-)
-return;
-
-const rect=
-canvas.getBoundingClientRect();
-
-const x=
-e.touches[0].clientX
--
-rect.left;
-
-const y=
-e.touches[0].clientY
--
-rect.top;
-
-for(
-let i=0;
-i<currentCards.length;
-i++
-){
-
-const cardX=
-25+i*140;
-
-if(
-
-x>cardX
-&&
-x<cardX+120
-
-&&
-
-y>250
-&&
-y<450
-
-){
-
-chooseCard(i);
-
-}
-
-}
-
-},
-{
-passive:false
-}
-);// =====================
-// 카드 UI
-// =====================
-
-function drawCardMenu(){
-
-if(
-!cardMenu
-)
-return;
-
-ctx.fillStyle=
-"rgba(0,0,0,0.85)";
-
-ctx.fillRect(
-0,
-0,
-WIDTH,
-HEIGHT
-);
-
-ctx.textAlign=
-"center";
-
-ctx.fillStyle=
-"white";
-
-ctx.font=
-"42px Arial";
-
-ctx.fillText(
-"카드 선택",
-WIDTH/2,
-90
-);
-
-ctx.font=
-"28px Arial";
-
-ctx.fillText(
-Math.ceil(
-cardCountdown/60
-),
-WIDTH/2,
-140
-);
-
-for(
-let i=0;
-i<currentCards.length;
-i++
-){
-
-const card=
-currentCards[i];
-
-let color="green";
-
-if(card.rarity==="blue")
-color="dodgerblue";
-
-if(card.rarity==="purple")
-color="purple";
-
-if(card.rarity==="penalty")
-color="red";
-
-const x=
-25+i*140;
-
-ctx.fillStyle=
-color;
-
-ctx.fillRect(
-x,
-250,
-120,
-200
-);
-
-ctx.fillStyle=
-"white";
-
-ctx.font=
-"14px Arial";
-
-ctx.fillText(
-card.name,
-x+60,
-350
-);
-
-}
-
-}// =====================
-// 힐 십자가 생성
-// =====================
-
-function spawnHealCross(){
-
-healCrosses.push({
-
-x:
-getArenaX()+30+
-Math.random()*
-(arena.w-60),
-
-y:
-getArenaY()+30+
-Math.random()*
-(arena.h-60),
-
-r:15,
-
-life:600
-
-});
-
-}// =====================
-// 힐 십자가 업데이트
-// =====================
-
-function updateHealCrosses(){
-
-for(
-let i=
-healCrosses.length-1;
-i>=0;
-i--
-){
-
-const h=
-healCrosses[i];
-
-h.life--;
-
-if(
-circleCollision(
-player,
-h
-)
-){
-
-stats.hp=
-Math.min(
-
-stats.maxHp,
-
-stats.hp+
-stats.maxHp*0.1
-
-);
-
-healCrosses.splice(
-i,
-1
-);
-
-continue;
-
-}
-
-if(
-h.life<=0
-){
-
-healCrosses.splice(
-i,
-1
-);
-
-}
-
-}
-
-}// =====================
-// 힐 십자가 그리기
-// =====================
-
-function drawHealCrosses(){
-
-for(
-const h
-of healCrosses
-){
-
-ctx.fillStyle=
-"#66ff66";
-
-ctx.fillRect(
-h.x-4,
-h.y-14,
-8,
-28
-);
-
-ctx.fillRect(
-h.x-14,
-h.y-4,
-28,
-8
-);
-
-}
-
-}// =====================
-// 보호막
-// =====================
-
-let shieldDuration=0;
-
-function updateShield(){
-
-if(
-!stats.shieldUnlocked
-)
-return;
-
-if(
-shieldDuration>0
-){
-
-shieldDuration--;
-
-if(
-shieldDuration<=0
-){
-
-stats.shieldActive=false;
-
-}
-
-return;
-
-}
-
-shieldTimer++;
-
-if(
-shieldTimer>=1800
-){
-
-shieldTimer=0;
-
-stats.shieldActive=true;
-
-shieldDuration=120;
-
-}
-
-}// =====================
-// 보호막 표시
-// =====================
-
-function drawShield(){
-
-if(
-!stats.shieldActive
-)
-return;
-
-ctx.beginPath();
-
-ctx.arc(
-
-player.x,
-player.y,
-
-player.r+12,
-
-0,
-Math.PI*2
-
-);
-
-ctx.strokeStyle=
-"#66ffff";
-
-ctx.lineWidth=4;
-
-ctx.stroke();
-
-}// =====================
-// 슬로우 필드
-// =====================
-
-let slowFieldDuration=0;
-
-function updateSlowField(){
-
-if(
-!stats.slowFieldUnlocked
-)
-return;
-
-if(
-slowFieldDuration>0
-){
-
-slowFieldDuration--;
-
-if(
-slowFieldDuration<=0
-){
-
-stats.slowFieldActive=false;
-
-}
-
-return;
-
-}
-
-slowFieldTimer++;
-
-if(
-slowFieldTimer>=2400
-){
-
-slowFieldTimer=0;
-
-stats.slowFieldActive=true;
-
-slowFieldDuration=300;
-
-}
-
-}// =====================
-// 슬로우 필드 적용
-// =====================
-
-function applySlowField(){
-
-if(
-!stats.slowFieldActive
-)
-return;
-
-for(
-const b
-of bullets
-){
-
-const dist=
-
-distance(
-
-player.x,
-player.y,
-
-b.x,
-b.y
-
-);
-
-if(
-dist<90
-){
-
-b.x-=
-b.vx*0.3;
-
-b.y-=
-b.vy*0.3;
-
-}
-
-}
-
-}// =====================
-// 슬로우 필드 표시
-// =====================
-
-function drawSlowField(){
-
-if(
-!stats.slowFieldActive
-)
-return;
-
-ctx.beginPath();
-
-ctx.arc(
-
-player.x,
-player.y,
-
-90,
-
-0,
-Math.PI*2
-
-);
-
-ctx.fillStyle=
-"rgba(0,255,255,0.15)";
-
-ctx.fill();
-
-}// =====================
-// 지속 회복
-// =====================
-
-function updatePassiveHeal(){
-
-if(
-stats.passiveHeal<=0
-)
-return;
-
-stats.hp=
-Math.min(
-
-stats.maxHp,
-
-stats.hp+
-stats.maxHp*
-stats.passiveHeal
-
-);
-
-}// =====================
-// 주기 회복
-// =====================
-
-function updatePeriodicHeal(){
-
-if(
-!stats.periodicHeal
-)
-return;
-
-if(
-frame%1800===0
-){
-
-stats.hp=
-Math.min(
-
-stats.maxHp,
-
-stats.hp+
-stats.maxHp*0.05
-
-);
-
-}
-
-}// =====================
-// 주기 피해
-// =====================
-
-function updatePeriodicDamage(){
-
-if(
-!stats.periodicDamage
-)
-return;
-
-if(
-frame%1800===0
-){
-
-stats.hp-=
-stats.maxHp*0.05;
-
-}
-
-}// =====================
-// 크기 감소
-// 중첩 방지 버전
-// =====================
-
-let smallModeDuration=0;
-
-function updateSmallMode(){
-
-if(
-!stats.smallMode
-)
-return;
-
-if(
-smallModeDuration>0
-){
-
-smallModeDuration--;
-
-if(
-smallModeDuration<=0
-){
-
-player.r=
-player.baseRadius;
-
-}
-
-return;
-
-}
-
-if(
-frame%1800===0
-){
-
-player.r=
-player.baseRadius*
-0.95;
-
-smallModeDuration=
-180;
-
-}
-
-}// =====================
-// HP 5% 이하 슬로우
-// =====================
-
-let lowHpSlowDuration=0;
-
-function updateLowHpSlow(){
-
-if(
-!stats.lowHpSlow
-)
-return;
-
-if(
-lowHpSlowDuration>0
-){
-
-lowHpSlowDuration--;
-
-if(
-lowHpSlowDuration<=0
-){
-
-stats.enemySpeedMultiplier/=0.5;
-
-}
-
-return;
-
-}
-
-if(
-stats.hp
-<=
-stats.maxHp*0.05
-){
-
-lowHpSlowDuration=
-300;
-
-stats.enemySpeedMultiplier*=0.5;
-
-}
-
-}// =====================
-// 힐 십자가 생성
-// =====================
-
-function updateHealCrossSpawn(){
-
-if(
-!stats.healCrossUnlocked
-)
-return;
-
-healCrossTimer++;
-
-if(
-healCrossTimer>=600
-){
-
-healCrossTimer=0;
-
-spawnHealCross();
-
-}
-
-}// =====================
-// 카드 효과 통합
-// =====================
-
-function updateCardEffects(){
-
-updateShield();
-
-updateSlowField();
-
-applySlowField();
-
-updatePassiveHeal();
-
-updatePeriodicHeal();
-
-updatePeriodicDamage();
-
-updateSmallMode();
-
-updateLowHpSlow();
-
-updateHealCrossSpawn();
-
-}// =====================
-// 게임 오브젝트 그리기
-// =====================
-
-function drawGameObjects(){
-
-drawArena();
-
-drawSlowField();
-
-drawHealCrosses();
-
-drawBullets();
-
-drawPlayer();
-
-drawShield();
-
-drawHpBar();
-
-drawTime();
-
-}// =====================
-// 게임 업데이트
+// MAIN LOOP (CORE)
 // =====================
 
 function update(){
 
-if(
-gameOver
-)
-return;
+updateCountdown();
 
-// 카드창 열리면
-// 게임 전체 정지
+if(!game.started) return;
+if(game.gameOver) return;
+if(game.paused) return;
 
-if(
-gamePaused
-){
-
-updateCardMenu();
-
-return;
+updateInput();
+updatePlayer();
+updateEntities();
+updateProjectiles();
+updateEffects();
+updateGameRules();
 
 }
-
-updatePlayer();
-
-updateArenaCollision();
-
-updateBullets();
-
-updateHealCrosses();
-
-updateCardEffects();
-
-updateNormalAttacks();
-
-updateSpecialAttacks();
-
-updateCardTimer();
-
-checkDeath();
-
-frame++;
-
-}// =====================
-// 게임 렌더링
-// =====================
 
 function render(){
 
-ctx.clearRect(
-0,
-0,
-WIDTH,
-HEIGHT
-);
+ctx.clearRect(0,0,WIDTH,HEIGHT);
 
-drawGameObjects();
-
-drawCardMenu();
-
-}// =====================
-// 게임오버
-// =====================
-
-function drawGameOver(){
-
-if(
-!gameOver
-)
-return;
-
-ctx.fillStyle=
-"rgba(0,0,0,0.85)";
-
-ctx.fillRect(
-0,
-0,
-WIDTH,
-HEIGHT
-);
-
-ctx.fillStyle=
-"red";
-
-ctx.font=
-"60px Arial";
-
-ctx.textAlign=
-"center";
-
-ctx.fillText(
-
-"GAME OVER",
-
-WIDTH/2,
-
-HEIGHT/2
-
-);
-
-ctx.fillStyle=
-"white";
-
-ctx.font=
-"26px Arial";
-
-ctx.fillText(
-
-"생존 시간 : "
-+
-surviveTime
-+
-"초",
-
-WIDTH/2,
-
-HEIGHT/2+70
-
-);
-
-}// =====================
-// 메인 루프
-// =====================
-
-function gameLoop(){
-
-if(
-!gameStarted
-){
-
+drawArena();
+drawEntities();
+drawProjectiles();
+drawEffects();
+drawPlayer();
+drawUI();
 drawCountdown();
-
-requestAnimationFrame(
-gameLoop
-);
-
-return;
 
 }
 
-update();
+function loop(time){
 
+if(!lastTime) lastTime = time;
+
+deltaTime = (time - lastTime) / 1000;
+lastTime = time;
+
+update();
 render();
 
-drawGameOver();
+requestAnimationFrame(loop);
+}
 
-requestAnimationFrame(
-gameLoop
-);
+requestAnimationFrame(loop);
 
-}// =====================
-// 시작
+</script>
+
+</body>
+</html>// =====================
+// JOYSTICK
 // =====================
 
-startCountdown();
+const joystick = {
 
-gameLoop();
+baseX: WIDTH/2,
+baseY: HEIGHT - 110,
+
+baseR: 55,
+knobR: 22,
+
+dx: 0,
+dy: 0,
+
+active: false,
+touchId: null
+
+};
+
+// =====================
+// TOUCH INPUT
+// =====================
+
+canvas.addEventListener("touchstart", (e) => {
+
+const rect = canvas.getBoundingClientRect();
+
+for(const t of e.changedTouches){
+
+const x = t.clientX - rect.left;
+const y = t.clientY - rect.top;
+
+const dx = x - joystick.baseX;
+const dy = y - joystick.baseY;
+
+const dist = Math.sqrt(dx*dx + dy*dy);
+
+if(dist <= joystick.baseR + 50){
+
+joystick.active = true;
+joystick.touchId = t.identifier;
+
+updateJoystick(x, y);
+
+break;
+
+}
+
+}
+
+e.preventDefault();
+
+}, {passive:false});
+
+canvas.addEventListener("touchmove", (e) => {
+
+if(!joystick.active) return;
+
+const rect = canvas.getBoundingClientRect();
+
+for(const t of e.changedTouches){
+
+if(t.identifier !== joystick.touchId) continue;
+
+updateJoystick(
+t.clientX - rect.left,
+t.clientY - rect.top
+);
+
+}
+
+e.preventDefault();
+
+}, {passive:false});
+
+canvas.addEventListener("touchend", (e) => {
+
+for(const t of e.changedTouches){
+
+if(t.identifier === joystick.touchId){
+
+joystick.active = false;
+joystick.touchId = null;
+
+joystick.dx = 0;
+joystick.dy = 0;
+
+}
+
+}
+
+}, {passive:false});
+
+// =====================
+// JOYSTICK UPDATE
+// =====================
+
+function updateJoystick(x, y){
+
+let dx = x - joystick.baseX;
+let dy = y - joystick.baseY;
+
+const dist = Math.sqrt(dx*dx + dy*dy);
+
+if(dist > joystick.baseR){
+
+dx = dx / dist * joystick.baseR;
+dy = dy / dist * joystick.baseR;
+
+}
+
+joystick.dx = dx / joystick.baseR;
+joystick.dy = dy / joystick.baseR;
+
+}
+
+// =====================
+// PLAYER UPDATE
+// =====================
+
+function updatePlayer(){
+
+player.x += joystick.dx * player.speed * deltaTime;
+player.y += joystick.dy * player.speed * deltaTime;
+
+// arena limit
+
+const left = getArenaX();
+const right = left + arena.w;
+const top = getArenaY();
+const bottom = top + arena.h;
+
+player.x = Math.max(left + player.r, Math.min(right - player.r, player.x));
+player.y = Math.max(top + player.r, Math.min(bottom - player.r, player.y));
+
+}
+
+// =====================
+// INPUT UPDATE HOOK
+// =====================
+
+function updateInput(){
+// reserved for future cards / pause / skills
+}// =====================
+// ENTITIES CORE
+// =====================
+
+const normalBullets = [];
+const specialBullets = [];
+
+// =====================
+// BULLET CREATION
+// =====================
+
+function createBullet(type, x, y, vx, vy, damage){
+
+const bullet = {
+
+x,
+y,
+vx,
+vy,
+
+r: 6,
+damage: damage,
+
+type: type,
+
+life: 0
+
+};
+
+if(type === "normal"){
+normalBullets.push(bullet);
+}else{
+specialBullets.push(bullet);
+}
+
+}
+
+// =====================
+// UPDATE NORMAL BULLETS
+// =====================
+
+function updateNormalBullets(){
+
+for(let i = normalBullets.length - 1; i >= 0; i--){
+
+const b = normalBullets[i];
+
+b.x += b.vx * deltaTime;
+b.y += b.vy * deltaTime;
+
+b.life++;
+
+if(
+b.x < -100 || b.x > WIDTH + 100 ||
+b.y < -100 || b.y > HEIGHT + 100
+){
+normalBullets.splice(i, 1);
+continue;
+}
+
+// player collision
+if(circleHit(b, player)){
+damagePlayer(b.damage);
+normalBullets.splice(i, 1);
+}
+
+}
+
+}
+
+// =====================
+// UPDATE SPECIAL BULLETS
+// =====================
+
+function updateSpecialBullets(){
+
+for(let i = specialBullets.length - 1; i >= 0; i--){
+
+const b = specialBullets[i];
+
+b.x += b.vx * deltaTime;
+b.y += b.vy * deltaTime;
+
+b.life++;
+
+if(
+b.x < -100 || b.x > WIDTH + 100 ||
+b.y < -100 || b.y > HEIGHT + 100
+){
+specialBullets.splice(i, 1);
+continue;
+}
+
+if(circleHit(b, player)){
+damagePlayer(b.damage);
+specialBullets.splice(i, 1);
+}
+
+}
+
+}
+
+// =====================
+// COLLISION
+// =====================
+
+function circleHit(a, b){
+
+const dx = a.x - b.x;
+const dy = a.y - b.y;
+
+const dist = Math.sqrt(dx*dx + dy*dy);
+
+return dist < (a.r + b.r);
+
+}
+
+// =====================
+// DAMAGE SYSTEM
+// =====================
+
+function damagePlayer(dmg){
+
+if(game.gameOver) return;
+
+// dodge placeholder
+// (later cards will modify this)
+
+let finalDmg = dmg;
+
+// apply future modifiers safely
+stats.hp -= finalDmg;
+
+if(stats.hp <= 0){
+
+stats.hp = 0;
+game.gameOver = true;
+
+}
+
+}
+
+// =====================
+// UPDATE HOOK
+// =====================
+
+function updateEntities(){
+// reserved for cards / enemies / objects
+}
+
+function updateProjectiles(){
+
+updateNormalBullets();
+updateSpecialBullets();
+
+}
+
+// =====================
+// DRAW BULLETS
+// =====================
+
+function drawProjectiles(){
+
+// normal
+for(const b of normalBullets){
+
+ctx.beginPath();
+ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+ctx.fillStyle = "orange";
+ctx.fill();
+
+}
+
+// special
+for(const b of specialBullets){
+
+ctx.beginPath();
+ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+ctx.fillStyle = "red";
+ctx.fill();
+
+}
+
+}// =====================
+// ATTACK TIMER
+// =====================
+
+let attackTimer = 0;
+let attackInterval = 1.2;
+
+// =====================
+// UPDATE ATTACKS
+// =====================
+
+function updateAttacks(){
+
+if(!game.started) return;
+if(game.gameOver) return;
+
+attackTimer += deltaTime;
+
+if(attackTimer < attackInterval) return;
+
+attackTimer = 0;
+
+// 랜덤 공격 패턴 선택 (Part4에서는 5개만 기본)
+// Part5에서 15개로 확장
+
+const pattern = Math.floor(Math.random() * 5);
+
+if(pattern === 0) attackStraight();
+if(pattern === 1) attackSpread();
+if(pattern === 2) attackCircle();
+if(pattern === 3) attackCross();
+if(pattern === 4) attackRandom();
+
+}
+
+// =====================
+// PATTERN 1 - STRAIGHT
+// =====================
+
+function attackStraight(){
+
+const angle = Math.random() * Math.PI * 2;
+
+const speed = 180;
+
+createBullet(
+"normal",
+WIDTH/2,
+0,
+Math.cos(angle) * speed,
+Math.sin(angle) * speed,
+5
+);
+
+}
+
+// =====================
+// PATTERN 2 - SPREAD
+// =====================
+
+function attackSpread(){
+
+const baseAngle = Math.random() * Math.PI * 2;
+
+const speed = 160;
+
+for(let i = -2; i <= 2; i++){
+
+const angle = baseAngle + i * 0.2;
+
+createBullet(
+"normal",
+WIDTH/2,
+0,
+Math.cos(angle) * speed,
+Math.sin(angle) * speed,
+5
+);
+
+}
+
+}
+
+// =====================
+// PATTERN 3 - CIRCLE
+// =====================
+
+function attackCircle(){
+
+const count = 12;
+
+const speed = 150;
+
+for(let i = 0; i < count; i++){
+
+const angle = (Math.PI * 2 / count) * i;
+
+createBullet(
+"normal",
+WIDTH/2,
+HEIGHT/2,
+Math.cos(angle) * speed,
+Math.sin(angle) * speed,
+5
+);
+
+}
+
+}
+
+// =====================
+// PATTERN 4 - CROSS
+// =====================
+
+function attackCross(){
+
+const speed = 200;
+
+const dirs = [
+
+[1,0],[-1,0],[0,1],[0,-1]
+
+];
+
+for(const d of dirs){
+
+createBullet(
+"normal",
+WIDTH/2,
+HEIGHT/2,
+d[0]*speed,
+d[1]*speed,
+5
+);
+
+}
+
+}
+
+// =====================
+// PATTERN 5 - RANDOM SHOT
+// =====================
+
+function attackRandom(){
+
+for(let i = 0; i < 3; i++){
+
+createBullet(
+"normal",
+Math.random()*WIDTH,
+0,
+(Math.random()-0.5)*200,
+Math.random()*200,
+5
+);
+
+}
+
+}// =====================
+// SPECIAL ATTACK TIMER
+// =====================
+
+let specialAttackTimer = 0;
+let specialAttackInterval = 3.5;
+
+// =====================
+// UPDATE SPECIAL ATTACKS
+// =====================
+
+function updateSpecialAttacks(){
+
+if(!game.started) return;
+if(game.gameOver) return;
+
+specialAttackTimer += deltaTime;
+
+if(specialAttackTimer < specialAttackInterval) return;
+
+specialAttackTimer = 0;
+
+// 10개 중 랜덤 선택
+const pattern = Math.floor(Math.random() * 5);
+
+if(pattern === 0) laserAttack();
+if(pattern === 1) explosionAttack();
+if(pattern === 2) homingAttack();
+if(pattern === 3) spiralAttack();
+if(pattern === 4) wallAttack();
+
+}
+
+// =====================
+// SPECIAL 1 - LASER
+// =====================
+
+function laserAttack(){
+
+const angle = Math.random() * Math.PI * 2;
+
+const speed = 400;
+
+for(let i = 0; i < 8; i++){
+
+setTimeout(()=>{
+
+createBullet(
+"special",
+WIDTH/2,
+HEIGHT/2,
+Math.cos(angle) * speed,
+Math.sin(angle) * speed,
+8
+);
+
+}, i * 80);
+
+}
+
+}
+
+// =====================
+// SPECIAL 2 - EXPLOSION
+// =====================
+
+function explosionAttack(){
+
+const count = 20;
+
+const speed = 220;
+
+for(let i = 0; i < count; i++){
+
+const angle = (Math.PI * 2 / count) * i;
+
+createBullet(
+"special",
+Math.random() * WIDTH,
+Math.random() * HEIGHT/2,
+Math.cos(angle) * speed,
+Math.sin(angle) * speed,
+8
+);
+
+}
+
+}
+
+// =====================
+// SPECIAL 3 - HOMING
+// =====================
+
+function homingAttack(){
+
+const dx = player.x - WIDTH/2;
+const dy = player.y - HEIGHT/2;
+
+const dist = Math.sqrt(dx*dx + dy*dy);
+
+const speed = 260;
+
+createBullet(
+"special",
+WIDTH/2,
+0,
+(dx/dist) * speed,
+(dy/dist) * speed,
+8
+);
+
+}
+
+// =====================
+// SPECIAL 4 - SPIRAL
+// =====================
+
+function spiralAttack(){
+
+let angle = 0;
+
+const speed = 180;
+
+for(let i = 0; i < 12; i++){
+
+const a = angle + i * 0.5;
+
+createBullet(
+"special",
+WIDTH/2,
+HEIGHT/2,
+Math.cos(a) * speed,
+Math.sin(a) * speed,
+8
+);
+
+}
+
+}
+
+// =====================
+// SPECIAL 5 - WALL
+// =====================
+
+function wallAttack(){
+
+const speed = 200;
+
+for(let y = 0; y < HEIGHT; y += 60){
+
+createBullet(
+"special",
+0,
+y,
+speed,
+0,
+8
+);
+
+}
+
+for(let y = 0; y < HEIGHT; y += 60){
+
+createBullet(
+"special",
+WIDTH,
+y,
+-speed,
+0,
+8
+);
+
+}
+
+}// =====================
+// CARD SYSTEM CORE
+// =====================
+
+const cardPool = [
+
+"HP_UP",
+"DAMAGE_REDUCE",
+"SPEED_UP",
+"SHIELD",
+"HEAL",
+"REVIVE",
+"RANDOM_BULLET_CLEAR",
+"SLOW_FIELD",
+"DOUBLE_DODGE",
+"PASSIVE_HEAL"
+
+];
+
+let cardState = {
+
+active:false,
+timer:0,
+selectTime:10,
+
+cards:[],
+selected:false
+
+};
+
+// =====================
+// CARD TIMER
+// =====================
+
+let cardSpawnTimer = 0;
+let cardSpawnInterval = 25;
+
+// =====================
+// UPDATE CARDS
+// =====================
+
+function updateCards(){
+
+if(!game.started) return;
+if(game.gameOver) return;
+
+cardSpawnTimer += deltaTime;
+
+// 카드 생성
+if(!cardState.active && cardSpawnTimer >= cardSpawnInterval){
+
+cardSpawnTimer = 0;
+cardState.active = true;
+cardState.timer = 0;
+cardState.selected = false;
+
+generateCards();
+
+}
+
+// 카드 선택 시간
+if(cardState.active){
+
+cardState.timer += deltaTime;
+
+if(cardState.timer >= cardState.selectTime){
+
+autoSelectCard();
+
+}
+
+}
+
+}
+
+// =====================
+// GENERATE 3 CARDS
+// =====================
+
+function generateCards(){
+
+cardState.cards = [];
+
+for(let i = 0; i < 3; i++){
+
+const rand = Math.floor(Math.random() * cardPool.length);
+
+cardState.cards.push(cardPool[rand]);
+
+}
+
+}
+
+// =====================
+// SELECT CARD
+// =====================
+
+function selectCard(index){
+
+if(!cardState.active) return;
+
+applyCard(cardState.cards[index]);
+
+cardState.active = false;
+
+}
+
+// =====================
+// AUTO SELECT
+// =====================
+
+function autoSelectCard(){
+
+const r = Math.floor(Math.random() * 3);
+
+applyCard(cardState.cards[r]);
+
+cardState.active = false;
+
+}
+
+// =====================
+// APPLY CARD EFFECT
+// =====================
+
+function applyCard(card){
+
+if(card === "HP_UP"){
+stats.maxHp += 20;
+stats.hp += 20;
+}
+
+if(card === "DAMAGE_REDUCE"){
+stats.damageReduction += 0.1;
+}
+
+if(card === "SPEED_UP"){
+player.speed += 20;
+}
+
+if(card === "SHIELD"){
+stats.shieldActive = true;
+setTimeout(()=>stats.shieldActive=false, 3000);
+}
+
+if(card === "HEAL"){
+stats.hp = Math.min(stats.maxHp, stats.hp + 40);
+}
+
+if(card === "REVIVE"){
+stats.revive = true;
+}
+
+if(card === "RANDOM_BULLET_CLEAR"){
+normalBullets.length = 0;
+specialBullets.length = 0;
+}
+
+if(card === "SLOW_FIELD"){
+stats.enemySpeedMultiplier = 0.6;
+setTimeout(()=>stats.enemySpeedMultiplier=1, 5000);
+}
+
+if(card === "DOUBLE_DODGE"){
+stats.dodgeChance += 0.1;
+}
+
+if(card === "PASSIVE_HEAL"){
+stats.passiveHeal += 1;
+}
+
+}
+
+// =====================
+// UPDATE PASSIVE HEAL
+// =====================
+
+function updateCardEffects(){
+
+if(stats.passiveHeal > 0){
+
+stats.hp = Math.min(
+stats.maxHp,
+stats.hp + stats.passiveHeal * deltaTime
+);
+
+}
+
+}// =====================
+// HEAL CROSS OBJECT
+// =====================
+
+const healObjects = [];
+
+let healSpawnTimer = 0;
+let healSpawnInterval = 12;
+
+// =====================
+// UPDATE SPECIAL OBJECTS
+// =====================
+
+function updateEffects(){
+
+// heal spawn
+healSpawnTimer += deltaTime;
+
+if(healSpawnTimer >= healSpawnInterval){
+
+healSpawnTimer = 0;
+
+spawnHeal();
+
+}
+
+// update heal collision
+for(let i = healObjects.length - 1; i >= 0; i--){
+
+const h = healObjects[i];
+
+h.life -= deltaTime;
+
+if(h.life <= 0){
+healObjects.splice(i, 1);
+continue;
+}
+
+// collision
+const dx = player.x - h.x;
+const dy = player.y - h.y;
+
+const dist = Math.sqrt(dx*dx + dy*dy);
+
+if(dist < player.r + h.r){
+
+stats.hp = Math.min(stats.maxHp, stats.hp + 25);
+
+healObjects.splice(i, 1);
+
+}
+
+}
+
+}
+
+// =====================
+// SPAWN HEAL
+// =====================
+
+function spawnHeal(){
+
+const margin = 60;
+
+const x = getArenaX() + margin + Math.random() * (arena.w - margin*2);
+const y = getArenaY() + margin + Math.random() * (arena.h - margin*2);
+
+healObjects.push({
+
+x,
+y,
+
+r: 14,
+
+life: 6 // seconds
+
+});
+
+}
+
+// =====================
+// SHIELD VISUAL / STATE SUPPORT
+// =====================
+
+function applyShield(){
+
+stats.shieldActive = true;
+
+setTimeout(()=>{
+
+stats.shieldActive = false;
+
+}, 2500);
+
+}
+
+// =====================
+// DRAW SPECIAL OBJECTS HOOK
+// =====================
+
+function drawEffects(){
+
+// heal objects
+for(const h of healObjects){
+
+ctx.beginPath();
+
+ctx.arc(h.x, h.y, h.r, 0, Math.PI*2);
+
+ctx.fillStyle = "lime";
+
+ctx.fill();
+
+// cross mark
+ctx.strokeStyle = "white";
+ctx.lineWidth = 2;
+
+ctx.beginPath();
+ctx.moveTo(h.x - 6, h.y);
+ctx.lineTo(h.x + 6, h.y);
+ctx.stroke();
+
+ctx.beginPath();
+ctx.moveTo(h.x, h.y - 6);
+ctx.lineTo(h.x, h.y + 6);
+ctx.stroke();
+
+}
+
+// shield effect (player aura)
+if(stats.shieldActive){
+
+ctx.beginPath();
+
+ctx.arc(player.x, player.y, player.r + 8, 0, Math.PI*2);
+
+ctx.strokeStyle = "cyan";
+ctx.lineWidth = 3;
+ctx.stroke();
+
+}
+
+}// =====================
+// MAP RESIZE SYSTEM
+// =====================
+
+let arenaResize = {
+
+active:false,
+targetW:300,
+targetH:820,
+speed:1.5
+
+};
+
+function startArenaResize(newW, newH){
+
+arenaResize.active = true;
+
+arenaResize.targetW = newW;
+arenaResize.targetH = newH;
+
+}
+
+// =====================
+// UPDATE GAME RULES (EXTENDED)
+// =====================
+
+function updateGameRules(){
+
+// =====================
+// ARENA RESIZE
+// =====================
+
+if(arenaResize.active){
+
+const dx = arenaResize.targetW - arena.w;
+const dy = arenaResize.targetH - arena.h;
+
+arena.w += dx * deltaTime * arenaResize.speed;
+arena.h += dy * deltaTime * arenaResize.speed;
+
+// stop condition
+if(Math.abs(dx) < 1 && Math.abs(dy) < 1){
+
+arena.w = arenaResize.targetW;
+arena.h = arenaResize.targetH;
+arenaResize.active = false;
+
+}
+
+// push player if outside
+const left = getArenaX();
+const right = left + arena.w;
+const top = getArenaY();
+const bottom = top + arena.h;
+
+player.x = Math.max(left + player.r, Math.min(right - player.r, player.x));
+player.y = Math.max(top + player.r, Math.min(bottom - player.r, player.y));
+
+}
+
+// =====================
+// REVIVE SYSTEM
+// =====================
+
+if(stats.hp <= 0 && stats.revive && !stats.reviveUsed){
+
+stats.reviveUsed = true;
+stats.hp = stats.maxHp * 0.3;
+
+// short invincible window
+stats.invincible = true;
+
+setTimeout(()=>{
+
+stats.invincible = false;
+
+}, 2000);
+
+game.gameOver = false;
+
+}
+
+// =====================
+// GAME OVER CHECK
+// =====================
+
+if(stats.hp <= 0 && stats.reviveUsed){
+
+game.gameOver = true;
+
+}
+
+}
+
+// =====================
+// SLOW FIELD (OPTIONAL ZONE EFFECT)
+// =====================
+
+const slowFields = [];
+
+function spawnSlowField(){
+
+const x = getArenaX() + Math.random() * arena.w;
+const y = getArenaY() + Math.random() * arena.h;
+
+slowFields.push({
+
+x,
+y,
+r: 80,
+life: 6
+
+});
+
+}
+
+// =====================
+// UPDATE SLOW FIELD
+// =====================
+
+function updateSlowFields(){
+
+for(let i = slowFields.length - 1; i >= 0; i--){
+
+const s = slowFields[i];
+
+s.life -= deltaTime;
+
+if(s.life <= 0){
+slowFields.splice(i, 1);
+continue;
+}
+
+// player slow effect
+const dx = player.x - s.x;
+const dy = player.y - s.y;
+
+const dist = Math.sqrt(dx*dx + dy*dy);
+
+if(dist < s.r){
+
+player.speed = 150;
+
+}else{
+
+player.speed = 260;
+
+}
+
+}
+
+}
+
+// =====================
+// EXTEND EFFECT HOOK
+// =====================
+
+const _oldUpdateEffects = updateEffects;
+
+updateEffects = function(){
+
+_oldUpdateEffects();
+
+updateSlowFields();
+
+};
+
+// =====================
+// OPTIONAL VISUAL HOOK (ADD TO drawEffects)
+// =====================
+
+function drawSlowFields(){
+
+for(const s of slowFields){
+
+ctx.beginPath();
+
+ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+
+ctx.fillStyle = "rgba(0,150,255,0.15)";
+ctx.fill();
+
+ctx.strokeStyle = "rgba(0,150,255,0.5)";
+ctx.stroke();
+
+}
+
+}// =====================
+// UI STATE
+// =====================
+
+let uiState = {
+
+showCardUI:false
+
+};
+
+// =====================
+// MAIN UI UPDATE HOOK
+// =====================
+
+function drawUI(){
+
+drawHpUI();
+drawStatusUI();
+drawGameOverUI();
+drawCardUI();
+drawJoystickUI();
+
+}
+
+// =====================
+// HP UI
+// =====================
+
+function drawHpUI(){
+
+ctx.fillStyle = "#222";
+ctx.fillRect(20, 20, 200, 20);
+
+ctx.fillStyle = "lime";
+ctx.fillRect(
+20,
+20,
+200 * (stats.hp / stats.maxHp),
+20
+);
+
+ctx.strokeStyle = "white";
+ctx.strokeRect(20, 20, 200, 20);
+
+}
+
+// =====================
+// STATUS UI
+// =====================
+
+function drawStatusUI(){
+
+ctx.fillStyle = "white";
+ctx.font = "18px Arial";
+ctx.textAlign = "left";
+
+ctx.fillText(
+"TIME: " + Math.floor(performance.now()/1000),
+20,
+70
+);
+
+ctx.fillText(
+"HP: " + Math.floor(stats.hp),
+20,
+95
+);
+
+}
+
+// =====================
+// GAME OVER UI
+// =====================
+
+function drawGameOverUI(){
+
+if(!game.gameOver) return;
+
+ctx.fillStyle = "rgba(0,0,0,0.7)";
+ctx.fillRect(0,0,WIDTH,HEIGHT);
+
+ctx.fillStyle = "red";
+ctx.font = "60px Arial";
+ctx.textAlign = "center";
+
+ctx.fillText(
+"GAME OVER",
+WIDTH/2,
+HEIGHT/2
+);
+
+ctx.fillStyle = "white";
+ctx.font = "20px Arial";
+
+ctx.fillText(
+"Tap to Restart (not implemented yet)",
+WIDTH/2,
+HEIGHT/2 + 50
+);
+
+}
+
+// =====================
+// CARD UI
+// =====================
+
+function drawCardUI(){
+
+if(!cardState.active) return;
+
+ctx.fillStyle = "rgba(0,0,0,0.7)";
+ctx.fillRect(0,0,WIDTH,HEIGHT);
+
+ctx.fillStyle = "white";
+ctx.font = "22px Arial";
+ctx.textAlign = "center";
+
+ctx.fillText(
+"CHOOSE CARD",
+WIDTH/2,
+200
+);
+
+// draw 3 cards
+for(let i = 0; i < 3; i++){
+
+const x = 70 + i * 120;
+const y = 300;
+
+ctx.fillStyle = "rgba(255,255,255,0.1)";
+ctx.fillRect(x, y, 100, 140);
+
+ctx.strokeStyle = "white";
+ctx.strokeRect(x, y, 100, 140);
+
+ctx.fillStyle = "white";
+ctx.font = "14px Arial";
+
+ctx.fillText(
+cardState.cards[i],
+x + 50,
+y + 70
+);
+
+ctx.fillText(
+"Tap " + (i+1),
+x + 50,
+y + 100
+);
+
+}
+
+// timer
+ctx.fillText(
+"Time: " + Math.ceil(cardState.selectTime - cardState.timer),
+WIDTH/2,
+500
+);
+
+}
+
+// =====================
+// JOYSTICK UI (optional overlay fix)
+// =====================
+
+function drawJoystickUI(){
+
+if(cardState.active) return;
+
+ctx.beginPath();
+
+ctx.arc(
+joystick.baseX,
+joystick.baseY,
+joystick.baseR,
+0,
+Math.PI*2
+);
+
+ctx.strokeStyle = "white";
+ctx.lineWidth = 2;
+ctx.stroke();
+
+ctx.beginPath();
+
+ctx.arc(
+joystick.baseX + joystick.dx * joystick.baseR,
+joystick.baseY + joystick.dy * joystick.baseR,
+joystick.knobR,
+0,
+Math.PI*2
+);
+
+ctx.fillStyle = "white";
+ctx.fill();
+
+}
+
+// =====================
+// CARD INPUT (tap select)
+// =====================
+
+canvas.addEventListener("touchstart", (e) => {
+
+if(!cardState.active) return;
+
+const rect = canvas.getBoundingClientRect();
+
+const t = e.changedTouches[0];
+
+const x = t.clientX - rect.left;
+
+if(cardState.active){
+
+if(x < WIDTH/3) selectCard(0);
+else if(x < WIDTH*2/3) selectCard(1);
+else selectCard(2);
+
+}
+
+}, {passive:false});
+
+// =====================
+// HOOK INTO MAIN RENDER
+// =====================
+
+const _oldRender = render;
+
+render = function(){
+
+_oldRender();
+
+drawUI();
+
+};// =====================
+// FINAL CLEAN WRAP
+// =====================
+
+// 안전하게 혹시 undefined 방지
+if(typeof updateEffects !== "function"){
+updateEffects = function(){};
+}
+
+if(typeof updateGameRules !== "function"){
+updateGameRules = function(){};
+}
+
+if(typeof updateAttacks !== "function"){
+updateAttacks = function(){};
+}
+
+if(typeof updateSpecialAttacks !== "function"){
+updateSpecialAttacks = function(){};
+}
+
+// =====================
+// END HTML
+// =====================
+
 </script>
+
 </body>
 </html>
