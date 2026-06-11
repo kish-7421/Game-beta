@@ -1,1710 +1,243 @@
-<!DOCTYPE html>
-<html lang="ko">
+<!DOCTYPE html><html lang="ko">
 <head>
-
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-
-<title>Survival Game</title>
-
-<style>
-
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>생존 회피 게임</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }canvas {
+  background: black;
+  border: 6px solid #2d6cff;
+  box-shadow: 0 0 20px #2d6cff;
 }
 
-html,body{
-width:100%;
-height:100%;
-overflow:hidden;
-background:black;
-touch-action:none;
-}
-
-canvas{
-display:block;
-margin:auto;
-background:black;
-}
-
-</style>
-
+  </style>
 </head>
-
 <body>
-
-<canvas id="game"></canvas>
-
-<script>
-
-// =====================
-// Canvas
-// =====================
-
-const canvas =
-document.getElementById("game");
-
-const ctx =
-canvas.getContext("2d");
-
-canvas.width = 450;
-canvas.height = 900;
-
-const WIDTH = canvas.width;
-const HEIGHT = canvas.height;
-
-// =====================
-// Time System
-// =====================
-
-let lastTime = 0;
-let deltaTime = 0;
-
-// =====================
-// Game State (CORE)
-// =====================
-
-const game = {
-
-started:false,
-gameOver:false,
-paused:false,
-
-countdown:3,
-countdownTimer:0
-
-};
-
-// =====================
-// Player (CORE)
-// =====================
-
-const player = {
-
-x: WIDTH/2,
-y: HEIGHT/2,
-
-r: 12,
-speed: 260
-
-};
-
-// =====================
-// Arena (CORE)
-// =====================
-
-const arena = {
-
-x: WIDTH/2,
-y: HEIGHT/2,
-
-w: 300,
-h: 820
-
-};
-
-function getArenaX(){
-return arena.x - arena.w/2;
-}
-
-function getArenaY(){
-return arena.y - arena.h/2;
-}
-
-// =====================
-// DATA CONTAINERS (EMPTY CORE)
-// =====================
-
-const entities = [];
-const projectiles = [];
-const effects = [];
-const ui = [];
-
-// =====================
-// INPUT CORE (EMPTY FOR NOW)
-// =====================
-
-const input = {
-
-dx:0,
-dy:0,
-active:false
-
-};
-
-// =====================
-// CORE SYSTEM FUNCTIONS (DO NOT TOUCH)
-// =====================
-
-function updateInput(){}
-function updatePlayer(){}
-function updateEntities(){}
-function updateProjectiles(){}
-function updateEffects(){}
-function updateGameRules(){}
-
-// =====================
-// DRAW CORE
-// =====================
-
-function drawArena(){
-
-ctx.strokeStyle = "#3399ff";
-ctx.lineWidth = 5;
-
-ctx.strokeRect(
-getArenaX(),
-getArenaY(),
-arena.w,
-arena.h
-);
-
-}
-
-function drawPlayer(){
-
-ctx.beginPath();
-ctx.arc(player.x, player.y, player.r, 0, Math.PI*2);
-ctx.fillStyle = "white";
-ctx.fill();
-
-}
-
-function drawEntities(){}
-function drawProjectiles(){}
-function drawEffects(){}
-function drawUI(){}
-
-// =====================
-// COUNTDOWN CORE
-// =====================
-
-function updateCountdown(){
-
-if(game.started) return;
-
-game.countdownTimer += deltaTime;
-
-if(game.countdownTimer >= 1){
-
-game.countdownTimer = 0;
-game.countdown--;
-
-if(game.countdown <= 0){
-game.started = true;
-}
-
-}
-
-}
-
-function drawCountdown(){
-
-if(game.started) return;
-
-ctx.fillStyle = "white";
-ctx.font = "80px Arial";
-ctx.textAlign = "center";
-
-ctx.fillText(
-game.countdown,
-WIDTH/2,
-HEIGHT/2
-);
-
-}
-
-// =====================
-// MAIN LOOP (CORE)
-// =====================
-
-function update(){
-
-updateCountdown();
-
-if(!game.started) return;
-if(game.gameOver) return;
-if(game.paused) return;
-
-updateInput();
-updatePlayer();
-updateEntities();
-updateProjectiles();
-updateEffects();
-updateGameRules();
-
-}
-
-function render(){
-
-ctx.clearRect(0,0,WIDTH,HEIGHT);
-
-drawArena();
-drawEntities();
-drawProjectiles();
-drawEffects();
-drawPlayer();
-drawUI();
-drawCountdown();
-
-}
-
-function loop(time){
-
-if(!lastTime) lastTime = time;
-
-deltaTime = (time - lastTime) / 1000;
-lastTime = time;
-
-update();
-render();
-
-requestAnimationFrame(loop);
-}
-
-requestAnimationFrame(loop);
-
-</script>
-
-</body>
-</html>// =====================
-// JOYSTICK
-// =====================
-
-const joystick = {
-
-baseX: WIDTH/2,
-baseY: HEIGHT - 110,
-
-baseR: 55,
-knobR: 22,
-
-dx: 0,
-dy: 0,
-
-active: false,
-touchId: null
-
-};
-
-// =====================
-// TOUCH INPUT
-// =====================
-
-canvas.addEventListener("touchstart", (e) => {
-
-const rect = canvas.getBoundingClientRect();
-
-for(const t of e.changedTouches){
-
-const x = t.clientX - rect.left;
-const y = t.clientY - rect.top;
-
-const dx = x - joystick.baseX;
-const dy = y - joystick.baseY;
-
-const dist = Math.sqrt(dx*dx + dy*dy);
-
-if(dist <= joystick.baseR + 50){
-
-joystick.active = true;
-joystick.touchId = t.identifier;
-
-updateJoystick(x, y);
-
-break;
-
-}
-
-}
-
-e.preventDefault();
-
-}, {passive:false});
-
-canvas.addEventListener("touchmove", (e) => {
-
-if(!joystick.active) return;
-
-const rect = canvas.getBoundingClientRect();
-
-for(const t of e.changedTouches){
-
-if(t.identifier !== joystick.touchId) continue;
-
-updateJoystick(
-t.clientX - rect.left,
-t.clientY - rect.top
-);
-
-}
-
-e.preventDefault();
-
-}, {passive:false});
-
-canvas.addEventListener("touchend", (e) => {
-
-for(const t of e.changedTouches){
-
-if(t.identifier === joystick.touchId){
-
-joystick.active = false;
-joystick.touchId = null;
-
-joystick.dx = 0;
-joystick.dy = 0;
-
-}
-
-}
-
-}, {passive:false});
-
-// =====================
-// JOYSTICK UPDATE
-// =====================
-
-function updateJoystick(x, y){
-
-let dx = x - joystick.baseX;
-let dy = y - joystick.baseY;
-
-const dist = Math.sqrt(dx*dx + dy*dy);
-
-if(dist > joystick.baseR){
-
-dx = dx / dist * joystick.baseR;
-dy = dy / dist * joystick.baseR;
-
-}
-
-joystick.dx = dx / joystick.baseR;
-joystick.dy = dy / joystick.baseR;
-
-}
-
-// =====================
-// PLAYER UPDATE
-// =====================
-
-function updatePlayer(){
-
-player.x += joystick.dx * player.speed * deltaTime;
-player.y += joystick.dy * player.speed * deltaTime;
-
-// arena limit
-
-const left = getArenaX();
-const right = left + arena.w;
-const top = getArenaY();
-const bottom = top + arena.h;
-
-player.x = Math.max(left + player.r, Math.min(right - player.r, player.x));
-player.y = Math.max(top + player.r, Math.min(bottom - player.r, player.y));
-
-}
-
-// =====================
-// INPUT UPDATE HOOK
-// =====================
-
-function updateInput(){
-// reserved for future cards / pause / skills
-}// =====================
-// ENTITIES CORE
-// =====================
-
-const normalBullets = [];
-const specialBullets = [];
-
-// =====================
-// BULLET CREATION
-// =====================
-
-function createBullet(type, x, y, vx, vy, damage){
-
-const bullet = {
-
-x,
-y,
-vx,
-vy,
-
-r: 6,
-damage: damage,
-
-type: type,
-
-life: 0
-
-};
-
-if(type === "normal"){
-normalBullets.push(bullet);
-}else{
-specialBullets.push(bullet);
-}
-
-}
-
-// =====================
-// UPDATE NORMAL BULLETS
-// =====================
-
-function updateNormalBullets(){
-
-for(let i = normalBullets.length - 1; i >= 0; i--){
-
-const b = normalBullets[i];
-
-b.x += b.vx * deltaTime;
-b.y += b.vy * deltaTime;
-
-b.life++;
-
-if(
-b.x < -100 || b.x > WIDTH + 100 ||
-b.y < -100 || b.y > HEIGHT + 100
-){
-normalBullets.splice(i, 1);
-continue;
-}
-
-// player collision
-if(circleHit(b, player)){
-damagePlayer(b.damage);
-normalBullets.splice(i, 1);
-}
-
-}
-
-}
-
-// =====================
-// UPDATE SPECIAL BULLETS
-// =====================
-
-function updateSpecialBullets(){
-
-for(let i = specialBullets.length - 1; i >= 0; i--){
-
-const b = specialBullets[i];
-
-b.x += b.vx * deltaTime;
-b.y += b.vy * deltaTime;
-
-b.life++;
-
-if(
-b.x < -100 || b.x > WIDTH + 100 ||
-b.y < -100 || b.y > HEIGHT + 100
-){
-specialBullets.splice(i, 1);
-continue;
-}
-
-if(circleHit(b, player)){
-damagePlayer(b.damage);
-specialBullets.splice(i, 1);
-}
-
-}
-
-}
-
-// =====================
-// COLLISION
-// =====================
-
-function circleHit(a, b){
-
-const dx = a.x - b.x;
-const dy = a.y - b.y;
-
-const dist = Math.sqrt(dx*dx + dy*dy);
-
-return dist < (a.r + b.r);
-
-}
-
-// =====================
-// DAMAGE SYSTEM
-// =====================
-
-function damagePlayer(dmg){
-
-if(game.gameOver) return;
-
-// dodge placeholder
-// (later cards will modify this)
-
-let finalDmg = dmg;
-
-// apply future modifiers safely
-stats.hp -= finalDmg;
-
-if(stats.hp <= 0){
-
-stats.hp = 0;
-game.gameOver = true;
-
-}
-
-}
-
-// =====================
-// UPDATE HOOK
-// =====================
-
-function updateEntities(){
-// reserved for cards / enemies / objects
-}
-
-function updateProjectiles(){
-
-updateNormalBullets();
-updateSpecialBullets();
-
-}
-
-// =====================
-// DRAW BULLETS
-// =====================
-
-function drawProjectiles(){
-
-// normal
-for(const b of normalBullets){
-
-ctx.beginPath();
-ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
-ctx.fillStyle = "orange";
-ctx.fill();
-
-}
-
-// special
-for(const b of specialBullets){
-
-ctx.beginPath();
-ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
-ctx.fillStyle = "red";
-ctx.fill();
-
-}
-
-}// =====================
-// ATTACK TIMER
-// =====================
-
-let attackTimer = 0;
-let attackInterval = 1.2;
-
-// =====================
-// UPDATE ATTACKS
-// =====================
-
-function updateAttacks(){
-
-if(!game.started) return;
-if(game.gameOver) return;
-
-attackTimer += deltaTime;
-
-if(attackTimer < attackInterval) return;
-
-attackTimer = 0;
-
-// 랜덤 공격 패턴 선택 (Part4에서는 5개만 기본)
-// Part5에서 15개로 확장
-
-const pattern = Math.floor(Math.random() * 5);
-
-if(pattern === 0) attackStraight();
-if(pattern === 1) attackSpread();
-if(pattern === 2) attackCircle();
-if(pattern === 3) attackCross();
-if(pattern === 4) attackRandom();
-
-}
-
-// =====================
-// PATTERN 1 - STRAIGHT
-// =====================
-
-function attackStraight(){
-
-const angle = Math.random() * Math.PI * 2;
-
-const speed = 180;
-
-createBullet(
-"normal",
-WIDTH/2,
-0,
-Math.cos(angle) * speed,
-Math.sin(angle) * speed,
-5
-);
-
-}
-
-// =====================
-// PATTERN 2 - SPREAD
-// =====================
-
-function attackSpread(){
-
-const baseAngle = Math.random() * Math.PI * 2;
-
-const speed = 160;
-
-for(let i = -2; i <= 2; i++){
-
-const angle = baseAngle + i * 0.2;
-
-createBullet(
-"normal",
-WIDTH/2,
-0,
-Math.cos(angle) * speed,
-Math.sin(angle) * speed,
-5
-);
-
-}
-
-}
-
-// =====================
-// PATTERN 3 - CIRCLE
-// =====================
-
-function attackCircle(){
-
-const count = 12;
-
-const speed = 150;
-
-for(let i = 0; i < count; i++){
-
-const angle = (Math.PI * 2 / count) * i;
-
-createBullet(
-"normal",
-WIDTH/2,
-HEIGHT/2,
-Math.cos(angle) * speed,
-Math.sin(angle) * speed,
-5
-);
-
-}
-
-}
-
-// =====================
-// PATTERN 4 - CROSS
-// =====================
-
-function attackCross(){
-
-const speed = 200;
-
-const dirs = [
-
-[1,0],[-1,0],[0,1],[0,-1]
-
-];
-
-for(const d of dirs){
-
-createBullet(
-"normal",
-WIDTH/2,
-HEIGHT/2,
-d[0]*speed,
-d[1]*speed,
-5
-);
-
-}
-
-}
-
-// =====================
-// PATTERN 5 - RANDOM SHOT
-// =====================
-
-function attackRandom(){
-
-for(let i = 0; i < 3; i++){
-
-createBullet(
-"normal",
-Math.random()*WIDTH,
-0,
-(Math.random()-0.5)*200,
-Math.random()*200,
-5
-);
-
-}
-
-}// =====================
-// SPECIAL ATTACK TIMER
-// =====================
-
-let specialAttackTimer = 0;
-let specialAttackInterval = 3.5;
-
-// =====================
-// UPDATE SPECIAL ATTACKS
-// =====================
-
-function updateSpecialAttacks(){
-
-if(!game.started) return;
-if(game.gameOver) return;
-
-specialAttackTimer += deltaTime;
-
-if(specialAttackTimer < specialAttackInterval) return;
-
-specialAttackTimer = 0;
-
-// 10개 중 랜덤 선택
-const pattern = Math.floor(Math.random() * 5);
-
-if(pattern === 0) laserAttack();
-if(pattern === 1) explosionAttack();
-if(pattern === 2) homingAttack();
-if(pattern === 3) spiralAttack();
-if(pattern === 4) wallAttack();
-
-}
-
-// =====================
-// SPECIAL 1 - LASER
-// =====================
-
-function laserAttack(){
-
-const angle = Math.random() * Math.PI * 2;
-
-const speed = 400;
-
-for(let i = 0; i < 8; i++){
-
-setTimeout(()=>{
-
-createBullet(
-"special",
-WIDTH/2,
-HEIGHT/2,
-Math.cos(angle) * speed,
-Math.sin(angle) * speed,
-8
-);
-
-}, i * 80);
-
-}
-
-}
-
-// =====================
-// SPECIAL 2 - EXPLOSION
-// =====================
-
-function explosionAttack(){
-
-const count = 20;
-
-const speed = 220;
-
-for(let i = 0; i < count; i++){
-
-const angle = (Math.PI * 2 / count) * i;
-
-createBullet(
-"special",
-Math.random() * WIDTH,
-Math.random() * HEIGHT/2,
-Math.cos(angle) * speed,
-Math.sin(angle) * speed,
-8
-);
-
-}
-
-}
-
-// =====================
-// SPECIAL 3 - HOMING
-// =====================
-
-function homingAttack(){
-
-const dx = player.x - WIDTH/2;
-const dy = player.y - HEIGHT/2;
-
-const dist = Math.sqrt(dx*dx + dy*dy);
-
-const speed = 260;
-
-createBullet(
-"special",
-WIDTH/2,
-0,
-(dx/dist) * speed,
-(dy/dist) * speed,
-8
-);
-
-}
-
-// =====================
-// SPECIAL 4 - SPIRAL
-// =====================
-
-function spiralAttack(){
-
-let angle = 0;
-
-const speed = 180;
-
-for(let i = 0; i < 12; i++){
-
-const a = angle + i * 0.5;
-
-createBullet(
-"special",
-WIDTH/2,
-HEIGHT/2,
-Math.cos(a) * speed,
-Math.sin(a) * speed,
-8
-);
-
-}
-
-}
-
-// =====================
-// SPECIAL 5 - WALL
-// =====================
-
-function wallAttack(){
-
-const speed = 200;
-
-for(let y = 0; y < HEIGHT; y += 60){
-
-createBullet(
-"special",
-0,
-y,
-speed,
-0,
-8
-);
-
-}
-
-for(let y = 0; y < HEIGHT; y += 60){
-
-createBullet(
-"special",
-WIDTH,
-y,
--speed,
-0,
-8
-);
-
-}
-
-}// =====================
-// CARD SYSTEM CORE
-// =====================
-
-const cardPool = [
-
-"HP_UP",
-"DAMAGE_REDUCE",
-"SPEED_UP",
-"SHIELD",
-"HEAL",
-"REVIVE",
-"RANDOM_BULLET_CLEAR",
-"SLOW_FIELD",
-"DOUBLE_DODGE",
-"PASSIVE_HEAL"
-
-];
-
-let cardState = {
-
-active:false,
-timer:0,
-selectTime:10,
-
-cards:[],
-selected:false
-
-};
-
-// =====================
-// CARD TIMER
-// =====================
-
-let cardSpawnTimer = 0;
-let cardSpawnInterval = 25;
-
-// =====================
-// UPDATE CARDS
-// =====================
-
-function updateCards(){
-
-if(!game.started) return;
-if(game.gameOver) return;
-
-cardSpawnTimer += deltaTime;
-
-// 카드 생성
-if(!cardState.active && cardSpawnTimer >= cardSpawnInterval){
-
-cardSpawnTimer = 0;
-cardState.active = true;
-cardState.timer = 0;
-cardState.selected = false;
-
-generateCards();
-
-}
-
-// 카드 선택 시간
-if(cardState.active){
-
-cardState.timer += deltaTime;
-
-if(cardState.timer >= cardState.selectTime){
-
-autoSelectCard();
-
-}
-
-}
-
-}
-
-// =====================
-// GENERATE 3 CARDS
-// =====================
-
-function generateCards(){
-
-cardState.cards = [];
-
-for(let i = 0; i < 3; i++){
-
-const rand = Math.floor(Math.random() * cardPool.length);
-
-cardState.cards.push(cardPool[rand]);
-
-}
-
-}
-
-// =====================
-// SELECT CARD
-// =====================
-
-function selectCard(index){
-
-if(!cardState.active) return;
-
-applyCard(cardState.cards[index]);
-
-cardState.active = false;
-
-}
-
-// =====================
-// AUTO SELECT
-// =====================
-
-function autoSelectCard(){
-
-const r = Math.floor(Math.random() * 3);
-
-applyCard(cardState.cards[r]);
-
-cardState.active = false;
-
-}
-
-// =====================
-// APPLY CARD EFFECT
-// =====================
-
-function applyCard(card){
-
-if(card === "HP_UP"){
-stats.maxHp += 20;
-stats.hp += 20;
-}
-
-if(card === "DAMAGE_REDUCE"){
-stats.damageReduction += 0.1;
-}
-
-if(card === "SPEED_UP"){
-player.speed += 20;
-}
-
-if(card === "SHIELD"){
-stats.shieldActive = true;
-setTimeout(()=>stats.shieldActive=false, 3000);
-}
-
-if(card === "HEAL"){
-stats.hp = Math.min(stats.maxHp, stats.hp + 40);
-}
-
-if(card === "REVIVE"){
-stats.revive = true;
-}
-
-if(card === "RANDOM_BULLET_CLEAR"){
-normalBullets.length = 0;
-specialBullets.length = 0;
-}
-
-if(card === "SLOW_FIELD"){
-stats.enemySpeedMultiplier = 0.6;
-setTimeout(()=>stats.enemySpeedMultiplier=1, 5000);
-}
-
-if(card === "DOUBLE_DODGE"){
-stats.dodgeChance += 0.1;
-}
-
-if(card === "PASSIVE_HEAL"){
-stats.passiveHeal += 1;
-}
-
-}
-
-// =====================
-// UPDATE PASSIVE HEAL
-// =====================
-
-function updateCardEffects(){
-
-if(stats.passiveHeal > 0){
-
-stats.hp = Math.min(
-stats.maxHp,
-stats.hp + stats.passiveHeal * deltaTime
-);
-
-}
-
-}// =====================
-// HEAL CROSS OBJECT
-// =====================
-
-const healObjects = [];
-
-let healSpawnTimer = 0;
-let healSpawnInterval = 12;
-
-// =====================
-// UPDATE SPECIAL OBJECTS
-// =====================
-
-function updateEffects(){
-
-// heal spawn
-healSpawnTimer += deltaTime;
-
-if(healSpawnTimer >= healSpawnInterval){
-
-healSpawnTimer = 0;
-
-spawnHeal();
-
-}
-
-// update heal collision
-for(let i = healObjects.length - 1; i >= 0; i--){
-
-const h = healObjects[i];
-
-h.life -= deltaTime;
-
-if(h.life <= 0){
-healObjects.splice(i, 1);
-continue;
-}
-
-// collision
-const dx = player.x - h.x;
-const dy = player.y - h.y;
-
-const dist = Math.sqrt(dx*dx + dy*dy);
-
-if(dist < player.r + h.r){
-
-stats.hp = Math.min(stats.maxHp, stats.hp + 25);
-
-healObjects.splice(i, 1);
-
-}
-
-}
-
-}
-
-// =====================
-// SPAWN HEAL
-// =====================
-
-function spawnHeal(){
-
-const margin = 60;
-
-const x = getArenaX() + margin + Math.random() * (arena.w - margin*2);
-const y = getArenaY() + margin + Math.random() * (arena.h - margin*2);
-
-healObjects.push({
-
-x,
-y,
-
-r: 14,
-
-life: 6 // seconds
-
-});
-
-}
-
-// =====================
-// SHIELD VISUAL / STATE SUPPORT
-// =====================
-
-function applyShield(){
-
-stats.shieldActive = true;
-
-setTimeout(()=>{
-
-stats.shieldActive = false;
-
-}, 2500);
-
-}
-
-// =====================
-// DRAW SPECIAL OBJECTS HOOK
-// =====================
-
-function drawEffects(){
-
-// heal objects
-for(const h of healObjects){
-
-ctx.beginPath();
-
-ctx.arc(h.x, h.y, h.r, 0, Math.PI*2);
-
-ctx.fillStyle = "lime";
-
-ctx.fill();
-
-// cross mark
-ctx.strokeStyle = "white";
-ctx.lineWidth = 2;
-
-ctx.beginPath();
-ctx.moveTo(h.x - 6, h.y);
-ctx.lineTo(h.x + 6, h.y);
-ctx.stroke();
-
-ctx.beginPath();
-ctx.moveTo(h.x, h.y - 6);
-ctx.lineTo(h.x, h.y + 6);
-ctx.stroke();
-
-}
-
-// shield effect (player aura)
-if(stats.shieldActive){
-
-ctx.beginPath();
-
-ctx.arc(player.x, player.y, player.r + 8, 0, Math.PI*2);
-
-ctx.strokeStyle = "cyan";
-ctx.lineWidth = 3;
-ctx.stroke();
-
-}
-
-}// =====================
-// MAP RESIZE SYSTEM
-// =====================
-
-let arenaResize = {
-
-active:false,
-targetW:300,
-targetH:820,
-speed:1.5
-
-};
-
-function startArenaResize(newW, newH){
-
-arenaResize.active = true;
-
-arenaResize.targetW = newW;
-arenaResize.targetH = newH;
-
-}
-
-// =====================
-// UPDATE GAME RULES (EXTENDED)
-// =====================
-
-function updateGameRules(){
-
-// =====================
-// ARENA RESIZE
-// =====================
-
-if(arenaResize.active){
-
-const dx = arenaResize.targetW - arena.w;
-const dy = arenaResize.targetH - arena.h;
-
-arena.w += dx * deltaTime * arenaResize.speed;
-arena.h += dy * deltaTime * arenaResize.speed;
-
-// stop condition
-if(Math.abs(dx) < 1 && Math.abs(dy) < 1){
-
-arena.w = arenaResize.targetW;
-arena.h = arenaResize.targetH;
-arenaResize.active = false;
-
-}
-
-// push player if outside
-const left = getArenaX();
-const right = left + arena.w;
-const top = getArenaY();
-const bottom = top + arena.h;
-
-player.x = Math.max(left + player.r, Math.min(right - player.r, player.x));
-player.y = Math.max(top + player.r, Math.min(bottom - player.r, player.y));
-
-}
-
-// =====================
-// REVIVE SYSTEM
-// =====================
-
-if(stats.hp <= 0 && stats.revive && !stats.reviveUsed){
-
-stats.reviveUsed = true;
-stats.hp = stats.maxHp * 0.3;
-
-// short invincible window
-stats.invincible = true;
-
-setTimeout(()=>{
-
-stats.invincible = false;
-
-}, 2000);
-
-game.gameOver = false;
-
-}
-
-// =====================
-// GAME OVER CHECK
-// =====================
-
-if(stats.hp <= 0 && stats.reviveUsed){
-
-game.gameOver = true;
-
-}
-
-}
-
-// =====================
-// SLOW FIELD (OPTIONAL ZONE EFFECT)
-// =====================
-
-const slowFields = [];
-
-function spawnSlowField(){
-
-const x = getArenaX() + Math.random() * arena.w;
-const y = getArenaY() + Math.random() * arena.h;
-
-slowFields.push({
-
-x,
-y,
-r: 80,
-life: 6
-
-});
-
-}
-
-// =====================
-// UPDATE SLOW FIELD
-// =====================
-
-function updateSlowFields(){
-
-for(let i = slowFields.length - 1; i >= 0; i--){
-
-const s = slowFields[i];
-
-s.life -= deltaTime;
-
-if(s.life <= 0){
-slowFields.splice(i, 1);
-continue;
-}
-
-// player slow effect
-const dx = player.x - s.x;
-const dy = player.y - s.y;
-
-const dist = Math.sqrt(dx*dx + dy*dy);
-
-if(dist < s.r){
-
-player.speed = 150;
-
-}else{
-
-player.speed = 260;
-
-}
-
-}
-
-}
-
-// =====================
-// EXTEND EFFECT HOOK
-// =====================
-
-const _oldUpdateEffects = updateEffects;
-
-updateEffects = function(){
-
-_oldUpdateEffects();
-
-updateSlowFields();
-
-};
-
-// =====================
-// OPTIONAL VISUAL HOOK (ADD TO drawEffects)
-// =====================
-
-function drawSlowFields(){
-
-for(const s of slowFields){
-
-ctx.beginPath();
-
-ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
-
-ctx.fillStyle = "rgba(0,150,255,0.15)";
-ctx.fill();
-
-ctx.strokeStyle = "rgba(0,150,255,0.5)";
-ctx.stroke();
-
-}
-
-}// =====================
-// UI STATE
-// =====================
-
-let uiState = {
-
-showCardUI:false
-
-};
-
-// =====================
-// MAIN UI UPDATE HOOK
-// =====================
-
-function drawUI(){
-
-drawHpUI();
-drawStatusUI();
-drawGameOverUI();
-drawCardUI();
-drawJoystickUI();
-
-}
-
-// =====================
-// HP UI
-// =====================
-
-function drawHpUI(){
-
-ctx.fillStyle = "#222";
-ctx.fillRect(20, 20, 200, 20);
-
-ctx.fillStyle = "lime";
-ctx.fillRect(
-20,
-20,
-200 * (stats.hp / stats.maxHp),
-20
-);
-
-ctx.strokeStyle = "white";
-ctx.strokeRect(20, 20, 200, 20);
-
-}
-
-// =====================
-// STATUS UI
-// =====================
-
-function drawStatusUI(){
-
-ctx.fillStyle = "white";
-ctx.font = "18px Arial";
-ctx.textAlign = "left";
-
-ctx.fillText(
-"TIME: " + Math.floor(performance.now()/1000),
-20,
-70
-);
-
-ctx.fillText(
-"HP: " + Math.floor(stats.hp),
-20,
-95
-);
-
-}
-
-// =====================
-// GAME OVER UI
-// =====================
-
-function drawGameOverUI(){
-
-if(!game.gameOver) return;
-
-ctx.fillStyle = "rgba(0,0,0,0.7)";
-ctx.fillRect(0,0,WIDTH,HEIGHT);
-
-ctx.fillStyle = "red";
-ctx.font = "60px Arial";
-ctx.textAlign = "center";
-
-ctx.fillText(
-"GAME OVER",
-WIDTH/2,
-HEIGHT/2
-);
-
-ctx.fillStyle = "white";
-ctx.font = "20px Arial";
-
-ctx.fillText(
-"Tap to Restart (not implemented yet)",
-WIDTH/2,
-HEIGHT/2 + 50
-);
-
-}
-
-// =====================
-// CARD UI
-// =====================
-
-function drawCardUI(){
-
-if(!cardState.active) return;
-
-ctx.fillStyle = "rgba(0,0,0,0.7)";
-ctx.fillRect(0,0,WIDTH,HEIGHT);
-
-ctx.fillStyle = "white";
-ctx.font = "22px Arial";
-ctx.textAlign = "center";
-
-ctx.fillText(
-"CHOOSE CARD",
-WIDTH/2,
-200
-);
-
-// draw 3 cards
-for(let i = 0; i < 3; i++){
-
-const x = 70 + i * 120;
-const y = 300;
-
-ctx.fillStyle = "rgba(255,255,255,0.1)";
-ctx.fillRect(x, y, 100, 140);
-
-ctx.strokeStyle = "white";
-ctx.strokeRect(x, y, 100, 140);
-
-ctx.fillStyle = "white";
-ctx.font = "14px Arial";
-
-ctx.fillText(
-cardState.cards[i],
-x + 50,
-y + 70
-);
-
-ctx.fillText(
-"Tap " + (i+1),
-x + 50,
-y + 100
-);
-
-}
-
-// timer
-ctx.fillText(
-"Time: " + Math.ceil(cardState.selectTime - cardState.timer),
-WIDTH/2,
-500
-);
-
-}
-
-// =====================
-// JOYSTICK UI (optional overlay fix)
-// =====================
-
-function drawJoystickUI(){
-
-if(cardState.active) return;
-
-ctx.beginPath();
-
-ctx.arc(
-joystick.baseX,
-joystick.baseY,
-joystick.baseR,
-0,
-Math.PI*2
-);
-
-ctx.strokeStyle = "white";
-ctx.lineWidth = 2;
-ctx.stroke();
-
-ctx.beginPath();
-
-ctx.arc(
-joystick.baseX + joystick.dx * joystick.baseR,
-joystick.baseY + joystick.dy * joystick.baseR,
-joystick.knobR,
-0,
-Math.PI*2
-);
-
-ctx.fillStyle = "white";
-ctx.fill();
-
-}
-
-// =====================
-// CARD INPUT (tap select)
-// =====================
-
-canvas.addEventListener("touchstart", (e) => {
-
-if(!cardState.active) return;
-
-const rect = canvas.getBoundingClientRect();
-
-const t = e.changedTouches[0];
-
-const x = t.clientX - rect.left;
-
-if(cardState.active){
-
-if(x < WIDTH/3) selectCard(0);
-else if(x < WIDTH*2/3) selectCard(1);
-else selectCard(2);
-
-}
-
-}, {passive:false});
-
-// =====================
-// HOOK INTO MAIN RENDER
-// =====================
-
-const _oldRender = render;
-
-render = function(){
-
-_oldRender();
-
-drawUI();
-
-};// =====================
-// FINAL CLEAN WRAP
-// =====================
-
-// 안전하게 혹시 undefined 방지
-if(typeof updateEffects !== "function"){
-updateEffects = function(){};
-}
-
-if(typeof updateGameRules !== "function"){
-updateGameRules = function(){};
-}
-
-if(typeof updateAttacks !== "function"){
-updateAttacks = function(){};
-}
-
-if(typeof updateSpecialAttacks !== "function"){
-updateSpecialAttacks = function(){};
-}
-
-// =====================
-// END HTML
-// =====================
-
-</script>
-
-</body>
+  <canvas id="game" width="900" height="600"></canvas>  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const keys = {};
+
+    document.addEventListener("keydown", (e) => {
+      keys[e.key.toLowerCase()] = true;
+    });
+
+    document.addEventListener("keyup", (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 15,
+      speed: 5,
+      hp: 100
+    };
+
+    let bullets = [];
+    let countdown = 3;
+    let gameStarted = false;
+    let gameOver = false;
+    let win = false;
+
+    let survivalTime = 60;
+
+    // 총알 생성
+    function spawnBullet() {
+      const side = Math.floor(Math.random() * 4);
+
+      let x, y, vx, vy;
+
+      const speed = 2 + Math.random() * 4;
+
+      if (side === 0) {
+        // 위
+        x = Math.random() * canvas.width;
+        y = -20;
+        vx = (Math.random() - 0.5) * 3;
+        vy = speed;
+      } else if (side === 1) {
+        // 오른쪽
+        x = canvas.width + 20;
+        y = Math.random() * canvas.height;
+        vx = -speed;
+        vy = (Math.random() - 0.5) * 3;
+      } else if (side === 2) {
+        // 아래
+        x = Math.random() * canvas.width;
+        y = canvas.height + 20;
+        vx = (Math.random() - 0.5) * 3;
+        vy = -speed;
+      } else {
+        // 왼쪽
+        x = -20;
+        y = Math.random() * canvas.height;
+        vx = speed;
+        vy = (Math.random() - 0.5) * 3;
+      }
+
+      bullets.push({
+        x,
+        y,
+        radius: 10,
+        vx,
+        vy
+      });
+    }
+
+    // 카운트다운
+    const countdownInterval = setInterval(() => {
+      countdown--;
+
+      if (countdown <= 0) {
+        gameStarted = true;
+        clearInterval(countdownInterval);
+
+        // 공격 생성 시작
+        setInterval(() => {
+          if (!gameOver && !win) {
+            for (let i = 0; i < 3; i++) {
+              spawnBullet();
+            }
+          }
+        }, 500);
+
+        // 1분 생존 타이머
+        const timer = setInterval(() => {
+          if (!gameOver) {
+            survivalTime--;
+          }
+
+          if (survivalTime <= 0) {
+            win = true;
+            clearInterval(timer);
+          }
+        }, 1000);
+      }
+    }, 1000);
+
+    function update() {
+      if (gameOver || win || !gameStarted) return;
+
+      // 이동
+      if (keys["w"]) player.y -= player.speed;
+      if (keys["s"]) player.y += player.speed;
+      if (keys["a"]) player.x -= player.speed;
+      if (keys["d"]) player.x += player.speed;
+
+      // 벽 데미지
+      const border = 6;
+
+      if (player.x - player.radius <= border ||
+          player.x + player.radius >= canvas.width - border ||
+          player.y - player.radius <= border ||
+          player.y + player.radius >= canvas.height - border) {
+        player.hp -= 0.2;
+      }
+
+      // 맵 밖 제한
+      player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+      player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+
+      // 총알 이동
+      bullets.forEach((bullet) => {
+        bullet.x += bullet.vx;
+        bullet.y += bullet.vy;
+
+        // 충돌 판정
+        const dx = bullet.x - player.x;
+        const dy = bullet.y - player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < bullet.radius + player.radius) {
+          player.hp -= 8;
+
+          bullet.x = -9999;
+        }
+      });
+
+      // 화면 밖 총알 제거
+      bullets = bullets.filter(
+        (b) =>
+          b.x > -100 &&
+          b.x < canvas.width + 100 &&
+          b.y > -100 &&
+          b.y < canvas.height + 100
+      );
+
+      // 게임 오버
+      if (player.hp <= 0) {
+        player.hp = 0;
+        gameOver = true;
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 플레이어
+      ctx.beginPath();
+      ctx.fillStyle = "white";
+      ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 총알
+      bullets.forEach((bullet) => {
+        ctx.beginPath();
+        ctx.fillStyle = "red";
+        ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // HP 바
+      ctx.fillStyle = "gray";
+      ctx.fillRect(20, 20, 200, 20);
+
+      ctx.fillStyle = "lime";
+      ctx.fillRect(20, 20, player.hp * 2, 20);
+
+      ctx.strokeStyle = "white";
+      ctx.strokeRect(20, 20, 200, 20);
+
+      // 텍스트
+      ctx.fillStyle = "white";
+      ctx.font = "28px Arial";
+
+      if (!gameStarted) {
+        ctx.fillText(`시작까지: ${countdown}`, canvas.width / 2 - 80, canvas.height / 2);
+      } else {
+        ctx.fillText(`남은 시간: ${survivalTime}`, canvas.width - 230, 40);
+      }
+
+      if (gameOver) {
+        ctx.fillStyle = "red";
+        ctx.font = "60px Arial";
+        ctx.fillText("GAME OVER", canvas.width / 2 - 190, canvas.height / 2);
+      }
+
+      if (win) {
+        ctx.fillStyle = "cyan";
+        ctx.font = "60px Arial";
+        ctx.fillText("CLEAR!", canvas.width / 2 - 120, canvas.height / 2);
+      }
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script></body>
 </html>
